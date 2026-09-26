@@ -663,6 +663,10 @@ metadata extraction from verdict logic:
   compressed data one turns up by chance, and the entry it hits may assert AI. The
   trim happens only when the container parses -- a malformed or unknown one is left
   whole, because dropping real evidence to avoid a chance match is the wrong trade.
+  When the reader could not open the manifest, the issuer and signer scan narrows
+  further to the manifest store the container locates (`_c2pa_store_bytes`: JPEG
+  APP11, PNG `caBX`): an XMP packet names Adobe in its toolkit string, and a vivo
+  X300 capture was labeled "C2PA signer: Adobe" from it (2026-09-26).
 - `identify_from_evidence` evaluates that evidence without reopening the source. Rules
   that decide a verdict live here, not in extraction: extraction has two
   implementations, and a rule in only one of them is a rule the other lacks. The

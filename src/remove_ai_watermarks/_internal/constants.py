@@ -106,6 +106,11 @@ C2PA_AI_VENDORS: tuple[C2paAiVendor, ...] = (
         "Dreamina",
         asserts_ai=True,
     ),
+    # Amazon Bedrock signs Nova Canvas images and Nova Reel video as "Amazon Web
+    # Services, Inc." with claim generator "Amazon Bedrock" (aws-samples outputs,
+    # checked 2026-09-26). Listed before Canva: the Nova Canvas software agent
+    # contains the Canva token, so a byte scan finds both.
+    _vendor(b"Amazon Web Services", "Amazon", "Amazon Bedrock (Nova)", "Amazon"),
     _vendor(b"Canva", "Canva", "Canva (Magic Media)", "Canva"),
     _vendor(b"Eleven Labs", "ElevenLabs", "ElevenLabs", "ElevenLabs"),
     _vendor(b"fal-ai", "fal.ai", "fal.ai", "fal.ai", asserts_ai=True),

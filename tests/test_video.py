@@ -3236,6 +3236,15 @@ class TestYouTubeReencodedSamples:
         assert contradicts_video_provenance("kling", veo.metadata_markers)
         assert not contradicts_video_provenance("kling", kling.metadata_markers)
 
+    def test_amazon_bedrock_nova_reel_is_attributed(self):
+        # aws-samples Nova Reel 1.1 output: C2PA from Amazon Web Services with
+        # claim generator "Amazon Bedrock"; before the vendor row the platform was None.
+        from remove_ai_watermarks.video import identify_video
+
+        report = identify_video(self._DIR / "amazon-bedrock-nova-reel.mp4", check_visible=False)
+        assert report.is_ai_generated is True
+        assert report.platform == "Amazon Bedrock (Nova)"
+
     def test_original_grok_video_is_xai_without_synthid(self):
         from remove_ai_watermarks.video import identify_video
 

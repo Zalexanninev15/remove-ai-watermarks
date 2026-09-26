@@ -286,6 +286,7 @@ not a universal clean verdict.
 | Kling AI | Kling AI image and video marks | No registered pixel decoder | TC260 AIGC |
 | Vidu (ShengShu) | Vidu video mark | No registered pixel decoder | TC260 AIGC in the MP4 `AIGC` key |
 | Runway | None measured on paid-plan output | No registered pixel decoder | C2PA signed `RUNWAY AI, INC.` on its own models; third-party models keep their vendor's manifest |
+| Amazon Bedrock (Nova Canvas, Nova Reel) | None | Invisible watermark readable only through the Bedrock API | C2PA signed `Amazon Web Services, Inc.`, claim generator `Amazon Bedrock` |
 | Wan (Alibaba) | Wan image mark | No registered pixel decoder | TC260 AIGC in XMP |
 | Hailuo AI / MiniMax video | Hailuo AI composite video label | No registered pixel decoder | TC260 AIGC where present |
 | Baidu | Baidu mark | No registered pixel decoder | TC260 AIGC |

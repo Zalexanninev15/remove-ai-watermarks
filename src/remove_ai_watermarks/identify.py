@@ -41,6 +41,7 @@ from remove_ai_watermarks._internal.c2pa import (
 from remove_ai_watermarks._internal.constants import (
     C2PA_AI_TOOLS,
     C2PA_AI_VENDORS,
+    C2PA_CHUNK_TYPE,
     C2PA_CLAIM_GENERATOR_PLATFORMS,
     C2PA_IDENTITY_AI_ORGS,
     C2PA_ISSUERS,
@@ -731,6 +732,40 @@ def _metadata_region(head: bytes) -> bytes:
     return head
 
 
+def _c2pa_store_bytes(head: bytes, fallback: bytes) -> bytes:
+    """The C2PA manifest-store bytes (JPEG APP11, PNG ``caBX``) of ``head``, else ``fallback``.
+
+    The issuer registry is matched by substring, and a metadata region also holds
+    XMP, whose boilerplate names Adobe (``Adobe XMP Core``, ``ns.adobe.com``): a
+    vivo X300 camera capture whose manifest the reader could not open was labeled
+    "C2PA signer: Adobe" from its XMP packet. Signer identity lives in the store, so
+    the fallback scan reads only the store where the container locates it. ``head``
+    must be the raw buffer: the trimmed metadata region has lost the PNG framing.
+    """
+    size = min(len(head), _SCAN_BYTES)
+    out = bytearray()
+    if head.startswith(b"\xff\xd8"):
+        index = 2
+        while index + 4 <= size and head[index] == 0xFF:
+            marker = head[index + 1]
+            if marker in (0xDA, 0xD9):
+                break
+            length = int.from_bytes(head[index + 2 : index + 4], "big")
+            if length < 2:
+                break
+            if marker == 0xEB:
+                out += head[index + 4 : min(index + 2 + length, size)]
+            index += 2 + length
+    elif head.startswith(b"\x89PNG\r\n\x1a\n"):
+        position = 8
+        while position + 8 <= size:
+            (length,) = struct.unpack(">I", head[position : position + 4])
+            if head[position + 4 : position + 8] == C2PA_CHUNK_TYPE:
+                out += head[position + 8 : min(position + 8 + length, size)]
+            position += 12 + length
+    return bytes(out) or fallback
+
+
 def _first_token_match(head: bytes, table: tuple[tuple[bytes, str], ...]) -> str | None:
     """First platform in ``table`` whose token appears in ``head``, else None.
 
@@ -1225,8 +1260,9 @@ def _identify_from_evidence(
     # The reader already named which failures moved a dimension; re-deriving that here
     # by substring made the displayed reason a second, looser rule than the verdict.
     failed_c2pa_codes = [str(code) for code in cast("list[object]", info.get("c2pa_failed_codes", []))]
-    issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(region)
-    signer_label = _signer_platform(region, issuers)
+    store = _c2pa_store_bytes(head, region)
+    issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(store)
+    signer_label = _signer_platform(store, issuers)
     # Full AI generation (trainedAlgorithmicMedia) vs an AI-enhanced real photo
     # (compositeWithTrainedAlgorithmicMedia). The structured kind is parsed once in
     # _internal.c2pa._structured_manifest_fields (covers PNG + any container the c2pa-python
@@ -1368,7 +1404,7 @@ def _identify_from_evidence(
         and trained_source
         and c2pa_marker_in(head)
         and not soft_binding_blocks_synthid
-        and (vendors := synthid_evidence_vendors_in(region))
+        and (vendors := synthid_evidence_vendors_in(store))
     ):
         synthid = synthid_verdict(", ".join(vendors))
     if synthid:

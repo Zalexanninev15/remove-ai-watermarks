@@ -883,6 +883,43 @@ class TestIdentifyRealSamples:
         assert any("SynthID" in watermark for watermark in r.watermarks)
         assert any("Google Photos AI edit" in caveat for caveat in r.caveats)
 
+    def test_amazon_bedrock_nova_canvas_is_not_canva(self):
+        # aws-samples Nova Canvas output: valid C2PA signed "Amazon Web Services,
+        # Inc.". Before the Amazon row, the byte fallback matched "Canva" inside the
+        # "Nova Canvas" software agent and reported Canva (Magic Media).
+        r = identify(SAMPLES_DIR / "amazon-bedrock-nova-canvas.png", check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.platform == "Amazon Bedrock (Nova)"
+        assert not any("Canva" in watermark for watermark in r.watermarks)
+
+    def test_xmp_boilerplate_does_not_name_a_c2pa_signer(self):
+        # A vivo X300 capture whose manifest the reader could not open was labeled
+        # "C2PA signer: Adobe" from its XMP packet ("Adobe XMP Core"). The fallback
+        # scan reads the manifest store (APP11), not the whole metadata region.
+        from remove_ai_watermarks.identify import _c2pa_store_bytes, _issuers_in, _metadata_region
+
+        def segment(marker: int, payload: bytes) -> bytes:
+            return bytes([0xFF, marker]) + (len(payload) + 2).to_bytes(2, "big") + payload
+
+        xmp = b"http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta x:xmptk='Adobe XMP Core 5.1.2'/>"
+        store = b"JP\x00\x01jumbjumdc2pa vivo C2PA Device CA1 c2pa.claim.v2"
+        jpeg = b"\xff\xd8" + segment(0xE1, xmp) + segment(0xEB, store) + b"\xff\xda\x00\x02" + b"\x00" * 16
+
+        region = _metadata_region(jpeg)
+        assert "Adobe" in _issuers_in(region)
+        assert _issuers_in(_c2pa_store_bytes(jpeg, region)) == []
+
+    def test_png_store_is_read_from_the_raw_buffer(self):
+        # The trimmed region drops the PNG signature and chunk lengths, so the store
+        # must come from the raw buffer to narrow a PNG at all.
+        from remove_ai_watermarks.identify import _c2pa_store_bytes, _metadata_region
+
+        head = (SAMPLES_DIR / "amazon-bedrock-nova-canvas.png").read_bytes()
+        region = _metadata_region(head)
+        store = _c2pa_store_bytes(head, region)
+        assert b"Amazon Web Services" in store
+        assert len(store) < len(region) // 4
+
     def test_apple_image_playground_attributed(self):
         # Real Image Playground export (2026-09-23): XMP photoshop:Credit plus the IPTC
         # digitalSourceType, no C2PA. The credit names the platform; the IPTC

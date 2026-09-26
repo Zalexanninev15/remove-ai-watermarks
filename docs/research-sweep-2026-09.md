@@ -42,7 +42,11 @@ This page is an index. Each finding lives in its canonical page.
   records SynthID in its manifest.
 - **Vidu and Wan marks on more samples.** Both are registered from one real
   export each (`vidu` video, `wan` image); their gates are provisional until a
-  wider cohort is measured, and a Wan video label is not yet captured.
+  wider cohort is measured, and a Wan video label is not yet captured. Public
+  Vidu feed videos (2026-09-26) carry the TC260 label naming ShengShu, and one
+  names Tongyi Yunqi as producer with Vidu as propagator, but none shows the
+  visible `Vidu` mark; Wan's public demo videos show no mark either. Both marks
+  appear only on account downloads.
 - **TC260 practice guides.** The audio placements from TC260-PG-202510A are
   now read (the guide PDFs load in a browser from
   `tc260.org.cn/tc260/sjzn/list.shtml`, not to scripted requests). The text-file
@@ -70,6 +74,14 @@ This page is an index. Each finding lives in its canonical page.
   real sample per vendor is still needed to confirm the manifest shape before
   adding a row. Runway is done: its own models sign as `RUNWAY AI, INC.`
   (measured 2026-09-24) and the row covers the conformance-list spelling too.
+  Amazon is done: Nova Canvas and Nova Reel outputs published in
+  `aws-samples/amazon-nova-samples` sign as `Amazon Web Services, Inc.` with
+  claim generator `Amazon Bedrock` (2026-09-26), and had been reported as Canva
+  because the byte fallback matched `Canva` inside `Nova Canvas`. A search on
+  2026-09-26 found no public Getty, iStock, Jasper, RefaceAI or vivo Albums file
+  carrying C2PA: their marketing and model-page images are unsigned. A vivo
+  X300 camera capture carries a vivo device manifest (`digitalCapture`) that
+  the bundled reader cannot open (`unknown algorithm`).
 - **Chinese phone galleries.** Huawei's help pages say the Xiaoyi photo-edit AI
   watermark can be switched off; Honor, OPPO and Xiaomi label behavior is not
   documented in any primary source found. vivo's Album setting is already
