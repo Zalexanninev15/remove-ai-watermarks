@@ -46,6 +46,27 @@ _SPARKLE_TARGET = "remove_ai_watermarks.gemini_engine.detect_sparkle_confidence"
 SAMPLES_DIR = Path(__file__).resolve().parent.parent / "data" / "fixtures" / "provenance"
 
 
+def _jpeg_segment(marker: int, payload: bytes) -> bytes:
+    """One JPEG marker segment with its big-endian length."""
+    return bytes([0xFF, marker]) + (len(payload) + 2).to_bytes(2, "big") + payload
+
+
+def _evidence(path: Path, info: dict, scan: bytes) -> ProvenanceEvidence:
+    """Evidence carrying only C2PA info and the scan buffer."""
+    return ProvenanceEvidence(
+        path=path,
+        c2pa_info=info,
+        ai_metadata={},
+        scan=scan,
+        iptc_ai_system=None,
+        aigc_label=None,
+        exif_generator=None,
+        xai_signature=False,
+        huggingface_job=None,
+        samsung_genai=None,
+    )
+
+
 def _write_c2pa_jpeg(tmp_path: Path, name: str, blob: bytes) -> Path:
     path = tmp_path / name
     path.write_bytes(b"\xff\xd8\xff\xe1jumbc2pa" + blob + b"\xff\xd9")
@@ -796,6 +817,150 @@ class TestIdentifyRealSamples:
         assert r.is_ai_generated is True
         assert any("IPTC" in w for w in r.watermarks)
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "google-nano-banana.png",
+            "google-nano-banana-2.jpg",
+            "google-nano-banana-pro.jpg",
+            "google-nano-banana-2-lite.jpg",
+        ],
+    )
+    def test_gemini_api_image_carries_google_c2pa_and_synthid(self, name: str):
+        # Real Gemini API outputs (2026-09-24), one per image model: valid Google C2PA
+        # with a SynthID action and no visible sparkle.
+        r = identify(SAMPLES_DIR / name, check_visible=True, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.ai_source_kind == "generated"
+        assert r.platform == "Google (Gemini / Imagen)"
+        assert r.c2pa_validation["state"] == "Valid"
+        assert "SynthID watermark (present according to Google LLC provenance)" in r.watermarks
+        assert not any("sparkle" in watermark.lower() for watermark in r.watermarks)
+
+    def test_runway_gen4_image_is_attributed_to_runway(self):
+        # Real Runway Gen-4 image artifact (2026-09-24): C2PA signed "RUNWAY AI, INC.",
+        # c2pa.created with software agent "Runway Image Generation", no visible mark.
+        r = identify(SAMPLES_DIR / "runway-gen4-image.png", check_visible=True, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.ai_source_kind == "generated"
+        assert r.platform == "Runway"
+        assert "C2PA Content Credentials (Runway)" in r.watermarks
+        assert not any("SynthID" in watermark for watermark in r.watermarks)
+
+    def test_dreamina_export_is_attributed_through_its_transcode_signer(self):
+        # Real Dreamina Seedream 5.0 Pro image (2026-09-24): the active claim is
+        # "ByteDance Media Transcode Service", the "Dreamina/7.5.0" generator sits in
+        # the ingredient. The generic signer label used to win over the product.
+        r = identify(SAMPLES_DIR / "dreamina-seedream-5-pro.jpg", check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.platform == "ByteDance Dreamina"
+
+    @pytest.mark.parametrize("name", ["higgsfield-gpt-image.jpg", "higgsfield-kling-o1.png"])
+    def test_non_google_provenance_vetoes_a_sparkle_on_texture(self, name: str):
+        # Higgsfield downloads (2026-09-24): a valid OpenAI C2PA and a Kuaishou TC260
+        # label, each scoring 0.53 as a Gemini sparkle on wood texture.
+        r = identify(SAMPLES_DIR / name, check_visible=True, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert not any("Gemini visible" in watermark for watermark in r.watermarks)
+        assert any("not reported as a Gemini mark" in caveat for caveat in r.caveats)
+
+    def test_google_provenance_keeps_the_sparkle(self):
+        # The veto is for other vendors only: a Google-signed Gemini image keeps it.
+        path = Path(__file__).resolve().parents[1] / "data/calibration/gemini/gemini_black_2048.png"
+        r = identify(path, check_visible=True, check_invisible=False)
+        assert any("Gemini visible" in watermark for watermark in r.watermarks)
+        assert not any("not reported as a Gemini mark" in caveat for caveat in r.caveats)
+
+    def test_higgsfield_job_breaks_the_upstream_manifest(self):
+        # FLUX.2 Pro via Higgsfield: Black Forest Labs signed the image, then
+        # Higgsfield inserted its hf-job-id chunk, so the data hash no longer matches.
+        r = identify(SAMPLES_DIR / "higgsfield-flux-2-pro.png", check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.confidence == "medium"
+        assert r.platform == "Higgsfield (model not identified)"
+        assert "C2PA Content Credentials (invalid asset binding or signature)" in r.watermarks
+        assert "Higgsfield job (hf-job-id)" in r.watermarks
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            SAMPLES_DIR / "google-photos-ios-edit.jpg",
+            *(
+                SAMPLES_DIR.parents[1] / "captures" / "2026-09" / "google-photos" / name
+                for name in ("ask-dog-to-cat.jpg", "eraser-glasses.jpg", "gphotos-5.jpg", "gphotos-6.jpg")
+            ),
+        ],
+        ids=lambda path: path.name,
+    )
+    def test_google_photos_ai_edit_reports_synthid(self, path: Path):
+        # Real Google Photos iOS AI edits (Ask, eraser and two others, 2026-09-23 to
+        # 2026-09-25): valid Google C2PA signed "Google Photos", no SynthID action.
+        # Google's checker found SynthID on all four captures.
+        r = identify(path, check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.ai_source_kind == "enhanced"
+        assert r.platform == "Google Photos (AI edit)"
+        assert r.c2pa_validation["state"] == "Valid"
+        assert any("SynthID" in watermark for watermark in r.watermarks)
+        assert any("Google Photos AI edit" in caveat for caveat in r.caveats)
+
+    def test_amazon_bedrock_nova_canvas_is_not_canva(self):
+        # aws-samples Nova Canvas output: valid C2PA signed "Amazon Web Services,
+        # Inc.". Before the Amazon row, the byte fallback matched "Canva" inside the
+        # "Nova Canvas" software agent and reported Canva (Magic Media).
+        r = identify(SAMPLES_DIR / "amazon-bedrock-nova-canvas.png", check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.platform == "Amazon Bedrock (Nova)"
+        assert not any("Canva" in watermark for watermark in r.watermarks)
+
+    def test_xmp_boilerplate_does_not_name_a_c2pa_signer(self):
+        # A vivo X300 capture whose manifest the reader could not open was labeled
+        # "C2PA signer: Adobe" from its XMP packet ("Adobe XMP Core"). The fallback
+        # scan reads the manifest store (APP11), not the whole metadata region.
+        from remove_ai_watermarks.identify import _c2pa_store_bytes, _issuers_in, _metadata_region
+
+        xmp = b"http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta x:xmptk='Adobe XMP Core 5.1.2'/>"
+        store = b"JP\x00\x01jumbjumdc2pa vivo C2PA Device CA1 c2pa.claim.v2"
+        jpeg = b"\xff\xd8" + _jpeg_segment(0xE1, xmp) + _jpeg_segment(0xEB, store) + b"\xff\xda\x00\x02" + b"\x00" * 16
+
+        region = _metadata_region(jpeg)
+        assert "Adobe" in _issuers_in(region)
+        assert _issuers_in(_c2pa_store_bytes(jpeg, region)) == []
+
+    def test_png_store_is_read_from_the_raw_buffer(self):
+        # The trimmed region drops the PNG signature and chunk lengths, so the store
+        # must come from the raw buffer to narrow a PNG at all.
+        from remove_ai_watermarks.identify import _c2pa_store_bytes, _metadata_region
+
+        head = (SAMPLES_DIR / "amazon-bedrock-nova-canvas.png").read_bytes()
+        region = _metadata_region(head)
+        store = _c2pa_store_bytes(head, region)
+        assert b"Amazon Web Services" in store
+        assert len(store) < len(region) // 4
+
+    def test_apple_image_playground_attributed(self):
+        # Real Image Playground export (2026-09-23): XMP photoshop:Credit plus the IPTC
+        # digitalSourceType, no C2PA. The credit names the platform; the IPTC
+        # value alone would leave it undetermined.
+        r = identify(SAMPLES_DIR / "apple-image-playground.png", check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.platform == "Apple Image Playground"
+        assert not any("C2PA" in watermark for watermark in r.watermarks)
+
+    def test_apple_generative_edit_clean_up_attributed(self, tmp_path: Path):
+        # Real Photos Clean Up credit, iPhone on iOS 27.0 (measured 2026-09-23). It does not
+        # contain the older "Apple Photos Clean Up" substring, so it needs its own
+        # entry or the platform falls back to undetermined.
+        p = tmp_path / "apple_generative_edit.jpg"
+        p.write_bytes(
+            b'\xff\xd8\xff\xe1<x:xmpmeta photoshop:Credit="Apple Photos Generative Edit: Clean Up" '
+            b"Iptc4xmpExt:DigitalSourceType=compositeWithTrainedAlgorithmicMedia></x:xmpmeta>\xff\xd9"
+        )
+        r = identify(p, check_visible=False, check_invisible=False)
+        assert r.is_ai_generated is True
+        assert r.platform == "Apple Photos (Clean Up AI edit)"
+        assert r.ai_source_kind == "enhanced"
+
     def test_apple_clean_up_attributed(self, tmp_path: Path):
         # Apple Photos Clean Up (Apple Intelligence object removal) marks the
         # AI edit via photoshop:Credit next to compositeWithTrainedAlgorithmicMedia
@@ -1017,7 +1182,7 @@ class TestIdentifyAigcPngChunk:
         assert "doubao" in signal.detail
 
 
-# ── Hugging Face-hosted job marker (medium confidence) ─────────────
+# ── Higgsfield job marker, hf-job-id (medium confidence) ───────────
 
 
 class TestIdentifyHuggingFaceJob:
@@ -1039,7 +1204,7 @@ class TestIdentifyHuggingFaceJob:
         assert r.is_ai_generated is True
         assert r.confidence == "medium"
         assert r.platform is not None
-        assert "Hugging Face" in r.platform
+        assert r.platform == "Higgsfield (model not identified)"
         signal = next(s for s in r.signals if s.name == "hf_job")
         assert signal.confidence == "medium"
 
@@ -2050,3 +2215,218 @@ class TestRegistryScansSkipTheCodedPixels:
         blob = b"\xff\xd8" + b"not really a jpeg, no valid marker chain here" * 4
 
         assert _metadata_region(blob) == blob
+
+
+class TestRegistryTokenMatching:
+    """Registry tokens match decoded manifest strings as whole words, never raw bytes a reader decoded."""
+
+    def test_word_matches_reject_a_token_inside_a_longer_word(self):
+        from remove_ai_watermarks._internal.c2pa import registry_word_matches
+        from remove_ai_watermarks._internal.constants import C2PA_AI_TOOLS, C2PA_ISSUERS
+
+        assert "Canva" not in registry_word_matches("Nova Canvas", C2PA_ISSUERS)
+        assert registry_word_matches("Canva", C2PA_ISSUERS) == ["Canva"]
+        assert "Adobe" in registry_word_matches("Adobe_Firefly", C2PA_ISSUERS)
+        assert "Firefly" in registry_word_matches("Adobe_Firefly", C2PA_AI_TOOLS)
+
+    @staticmethod
+    def _unknown_signer_report(tmp_path: Path, raw_extra: bytes = b"", agent: str = "Example Renderer"):
+        """A reader-decoded AI manifest from an unregistered signer, with ``raw_extra`` in its bytes."""
+        store = {
+            "active_manifest": "m",
+            "validation_results": {
+                "activeManifest": {
+                    "success": [{"code": "assertion.dataHash.match"}, {"code": "claimSignature.validated"}],
+                    "failure": [],
+                }
+            },
+            "manifests": {
+                "m": {
+                    "signature_info": {"issuer": "Example Studio, Inc.", "common_name": "Example Studio, Inc."},
+                    "assertions": [
+                        {
+                            "label": "c2pa.actions.v2",
+                            "data": {
+                                "actions": [
+                                    {
+                                        "action": "c2pa.created",
+                                        "softwareAgent": agent,
+                                        "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/"
+                                        "trainedAlgorithmicMedia",
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        info = c2pa_info_from_manifest_store(store)
+        assert info["c2pa_validation_source"] == "reader"
+        assert not info.get("issuer")
+        scan = b"jumb c2pa " + json.dumps(store).encode() + b" " + raw_extra
+        return identify_from_evidence(_evidence(tmp_path / "unknown-signer.png", info, scan))
+
+    def test_decoded_manifest_takes_no_signer_platform_from_raw_bytes(self, tmp_path: Path):
+        report = self._unknown_signer_report(tmp_path, b"ingredient signed by TikTok Inc.")
+        assert report.platform != "TikTok (C2PA signer)"
+
+    def test_decoded_manifest_takes_no_ai_tool_or_synthid_from_raw_bytes(self, tmp_path: Path):
+        report = self._unknown_signer_report(tmp_path, b"ingredient: Google LLC Imagen")
+        assert report.is_ai_generated is True
+        assert not any("SynthID" in mark for mark in report.watermarks)
+        assert not any("Imagen" in signal.detail for signal in report.signals)
+
+    def test_synthid_source_skips_raw_bytes_of_a_decoded_manifest(self, tmp_path: Path):
+        from remove_ai_watermarks.metadata import synthid_source
+
+        path = tmp_path / "decoded.jpg"
+        path.write_bytes(b"jumb c2pa trainedAlgorithmicMedia ingredient Google LLC")
+        assert synthid_source(path, c2pa_info={}) == "Google LLC"
+        assert synthid_source(path, c2pa_info={"c2pa_validation_source": "reader"}) is None
+
+    def test_decoded_manifest_takes_no_generator_or_soft_binding_from_raw_bytes(self, tmp_path: Path):
+        # An ingredient's claim_generator and soft-binding identifiers sit in the raw
+        # bytes; the decoded active manifest names neither.
+        report = self._unknown_signer_report(tmp_path, b"claim_generator\x67firefly com.digimarc.validate.1")
+        assert report.platform != "Adobe Firefly"
+        assert not any("Digimarc" in mark for mark in report.watermarks)
+
+    def test_device_token_outside_the_manifest_store_is_no_camera(self, tmp_path: Path):
+        # "NIKON" as an EXIF Make beside an unrelated AI manifest is not a verified
+        # Nikon capture: device tokens are read from the manifest store only.
+        store = {
+            "active_manifest": "m",
+            "manifests": {
+                "m": {
+                    "signature_info": {"issuer": "Example Studio, Inc."},
+                    "assertions": [
+                        {
+                            "label": "c2pa.actions.v2",
+                            "data": {
+                                "actions": [{"action": "c2pa.created", "digitalSourceType": "trainedAlgorithmicMedia"}]
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        jpeg = (
+            b"\xff\xd8"
+            + _jpeg_segment(0xE1, b"Exif\x00\x00 Make NIKON CORPORATION")
+            + _jpeg_segment(0xEB, b"JP\x00\x01jumbjumdc2pa " + json.dumps(store).encode())
+            + b"\xff\xda\x00\x02"
+            + b"\x00" * 16
+        )
+        info = c2pa_info_from_manifest_store(store)
+        report = identify_from_evidence(_evidence(tmp_path / "nikon-exif.jpg", info, jpeg))
+        assert report.is_ai_generated is True
+        assert report.platform != "Nikon (camera, C2PA capture)"
+
+    def test_claim_generator_tokens_are_whole_words(self):
+        from remove_ai_watermarks._internal.c2pa import claim_generator_platform
+
+        assert claim_generator_platform("Sunoco Studio 2.1") is None
+        assert claim_generator_platform("suno-v4 export") == "Suno"
+        assert claim_generator_platform("Adobe_Firefly") == "Adobe Firefly"
+
+    def test_video_generator_tokens_are_whole_words(self):
+        from remove_ai_watermarks.video import _video_markers_claim_ai
+
+        base = {"c2pa_manifest": "C2PA manifest store", "issuer": "Example Studio"}
+        assert not _video_markers_claim_ai({**base, "claim_generator": "Soraya Editor 3"})
+        assert _video_markers_claim_ai({**base, "claim_generator": "Sora 2"})
+
+    def test_decoded_manifest_with_unknown_signer_is_not_rescanned_as_bytes(self, tmp_path: Path):
+        # Before the Amazon row, a decoded Bedrock manifest with an unregistered signer
+        # fell back to a raw byte scan, which found "Canva" in the "Nova Canvas" agent.
+        report = self._unknown_signer_report(tmp_path, agent="Nova Canvas")
+
+        assert report.is_ai_generated is True
+        assert report.platform != "Canva (Magic Media)"
+        assert not any("Canva" in mark for mark in report.watermarks)
+
+
+class TestGooglePhotosSynthIdScope:
+    """A Google Photos AI edit reports SynthID without a recorded SynthID action.
+
+    Google documents SynthID only for Reimagine (blog.google, 2025-08-20), but its
+    checker found the mark on all four Photos AI edits tested on 2026-09-25.
+
+    The manifest shape mirrors a real Google Photos iOS object-removal edit captured
+    2026-09-23: signer common name "Google Photos", actions opened + deleted, the
+    deleted action typed compositeWithTrainedAlgorithmicMedia, no SynthID action.
+    """
+
+    @staticmethod
+    def _report(tmp_path: Path, *, common_name: str, extra_actions: list[dict]):
+        store = {
+            "active_manifest": "edit",
+            "validation_results": {
+                "activeManifest": {
+                    "success": [{"code": "assertion.dataHash.match"}, {"code": "claimSignature.validated"}],
+                    "failure": [],
+                }
+            },
+            "manifests": {
+                "edit": {
+                    "claim_generator_info": [{"name": "Google C2PA SDK for iOS"}],
+                    "signature_info": {"issuer": "Google LLC", "common_name": common_name},
+                    "assertions": [
+                        {
+                            "label": "c2pa.actions.v2",
+                            "data": {
+                                "actions": [
+                                    {"action": "c2pa.opened"},
+                                    {
+                                        "action": "c2pa.deleted",
+                                        "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/"
+                                        "compositeWithTrainedAlgorithmicMedia",
+                                    },
+                                    *extra_actions,
+                                ]
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        info = c2pa_info_from_manifest_store(store)
+        # The file's bytes carry the same manifest text the reader parsed.
+        scan = b"jumb c2pa " + json.dumps(store).encode()
+        evidence = ProvenanceEvidence(
+            path=tmp_path / "edit.jpg",
+            c2pa_info=info,
+            ai_metadata={},
+            scan=scan,
+            iptc_ai_system=None,
+            aigc_label=None,
+            exif_generator=None,
+            xai_signature=False,
+            huggingface_job=None,
+            samsung_genai=None,
+        )
+        return identify_from_evidence(evidence)
+
+    def test_photos_edit_without_synthid_action_claims_synthid(self, tmp_path: Path):
+        report = self._report(tmp_path, common_name="Google Photos", extra_actions=[])
+
+        assert report.is_ai_generated is True
+        assert report.ai_source_kind == "enhanced"
+        assert report.platform == "Google Photos (AI edit)"
+        assert any("SynthID" in mark for mark in report.watermarks)
+        assert any("Google Photos AI edit" in caveat for caveat in report.caveats)
+
+    def test_photos_edit_with_synthid_action_claims_synthid(self, tmp_path: Path):
+        synthid_action = {"action": "c2pa.edited", "description": "Added imperceptible SynthID watermark"}
+
+        report = self._report(tmp_path, common_name="Google Photos", extra_actions=[synthid_action])
+
+        assert any("SynthID" in mark for mark in report.watermarks)
+        assert report.platform == "Google Photos (AI edit)"
+
+    def test_other_google_signers_keep_synthid_without_the_action(self, tmp_path: Path):
+        report = self._report(tmp_path, common_name="Google Media Processing Services", extra_actions=[])
+
+        assert any("SynthID" in mark for mark in report.watermarks)
+        assert not any("Google Photos AI edit" in caveat for caveat in report.caveats)

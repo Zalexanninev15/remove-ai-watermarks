@@ -42,6 +42,7 @@ from remove_ai_watermarks._internal.c2pa import (
 from remove_ai_watermarks._internal.constants import (
     C2PA_AI_TOOLS,
     C2PA_AI_VENDORS,
+    C2PA_CHUNK_TYPE,
     C2PA_IDENTITY_AI_ORGS,
     C2PA_ISSUERS,
     C2PA_SIGNER_PLATFORM_BY_ORG,
@@ -98,6 +99,10 @@ _SCAN_BYTES = 1024 * 1024
 # false positives when the sparkle is the only signal (e.g. an OpenAI image scored
 # 0.37 -- below threshold, correctly dropped).
 _SPARKLE_THRESHOLD = GEMINI_SPARKLE_TRUST_CONF
+_SPARKLE_VETOED_CAVEAT = (
+    "A Gemini-sparkle-like pattern scored {conf:.2f}, but provenance names {vendor} as the "
+    "generator, so it is not reported as a Gemini mark."
+)
 
 # Issuer (C2PA signer) -> human-readable generating platform, derived from the
 # single C2PA_AI_VENDORS registry. Ordered: when a manifest names several issuers
@@ -119,6 +124,12 @@ _STRIP_CAVEAT = (
 _SYNTHID_CAVEAT = (
     "SynthID presence comes from supported provenance here; the pixel watermark is not locally "
     "decoded (proprietary decoder). Confirm via the Gemini app or openai.com/verify."
+)
+_GOOGLE_PHOTOS_EDIT = "Google Photos (AI edit)"
+_GOOGLE_PHOTOS_SYNTHID_CAVEAT = (
+    "SynthID on a Google Photos AI edit rests on measurement, not on the manifest: Google's checker "
+    "found it on every Photos AI edit tested (Ask, eraser and two other edits, 2026-09-25), but Google "
+    "notes a very small edit may not carry it. Confirm via the Gemini app."
 )
 _C2PA_UNTRUSTED_CAVEAT = (
     "The C2PA claim signature and asset binding validate, but no trust anchor list is configured here, "
@@ -143,9 +154,10 @@ _INVISIBLE_WM_CAVEAT = (
     "or resizing, so it confirms origin only on a pristine (un-re-encoded) file."
 )
 _HF_JOB_CAVEAT = (
-    "The hf-job-id tag marks a Hugging Face-hosted job (commonly diffusion "
-    "generation) but names neither the model nor the content type, so it is a "
-    "medium-confidence signal, not proof the pixels are AI-generated."
+    "The hf-job-id tag marks a Higgsfield generation job (Higgsfield writes it into most PNGs "
+    "it serves, for its own and hosted third-party models) but names no model, so it is a "
+    "medium-confidence signal. Higgsfield adds the tag after signing, which invalidates any "
+    "C2PA manifest the upstream model embedded."
 )
 _C2PA_CLOUD_CAVEAT = (
     "The embedded C2PA manifest is absent but an XMP provenance pointer to the "
@@ -459,7 +471,7 @@ def evidence_from_metadata_record(
     if iptc_system:
         ai_metadata.setdefault("ai_system", f"IPTC 2025.1 AI disclosure ({iptc_system})")
     if hf_job:
-        ai_metadata.setdefault("huggingface_job", f"Hugging Face-hosted job ({hf_job})")
+        ai_metadata.setdefault("huggingface_job", f"Higgsfield job ({hf_job})")
     if samsung is not None:
         ai_metadata.setdefault("samsung_genai", f"Samsung Galaxy AI editing marker (genAIType={samsung})")
 
@@ -705,6 +717,40 @@ def _metadata_region(head: bytes) -> bytes:
     return head
 
 
+def _c2pa_store_bytes(head: bytes, fallback: bytes) -> bytes:
+    """The C2PA manifest-store bytes (JPEG APP11, PNG ``caBX``) of ``head``, else ``fallback``.
+
+    The issuer registry is matched by substring, and a metadata region also holds
+    XMP, whose boilerplate names Adobe (``Adobe XMP Core``, ``ns.adobe.com``): a
+    vivo X300 camera capture whose manifest the reader could not open was labeled
+    "C2PA signer: Adobe" from its XMP packet. Signer identity lives in the store, so
+    the fallback scan reads only the store where the container locates it. ``head``
+    must be the raw buffer: the trimmed metadata region has lost the PNG framing.
+    """
+    size = min(len(head), _SCAN_BYTES)
+    out = bytearray()
+    if head.startswith(b"\xff\xd8"):
+        index = 2
+        while index + 4 <= size and head[index] == 0xFF:
+            marker = head[index + 1]
+            if marker in (0xDA, 0xD9):
+                break
+            length = int.from_bytes(head[index + 2 : index + 4], "big")
+            if length < 2:
+                break
+            if marker == 0xEB:
+                out += head[index + 4 : min(index + 2 + length, size)]
+            index += 2 + length
+    elif head.startswith(b"\x89PNG\r\n\x1a\n"):
+        position = 8
+        while position + 8 <= size:
+            (length,) = struct.unpack(">I", head[position : position + 4])
+            if head[position + 4 : position + 8] == C2PA_CHUNK_TYPE:
+                out += head[position + 8 : min(position + 8 + length, size)]
+            position += 12 + length
+    return bytes(out) or fallback
+
+
 def _first_token_match(head: bytes, table: tuple[tuple[bytes, str], ...]) -> str | None:
     """First platform in ``table`` whose token appears in ``head``, else None.
 
@@ -821,8 +867,24 @@ _AI_VENDOR_TOKENS: tuple[tuple[str, str], ...] = (
     ("fal-ai", "fal.ai"),
     ("bria", "Bria"),
     ("apple photos clean up", "Apple"),
+    ("apple photos generative edit", "Apple"),
+    ("apple image playground", "Apple"),
     ("luma ai", "Luma AI"),
     ("lumalabs", "Luma AI"),
+)
+
+
+# photoshop:Credit values Apple writes next to the IPTC digitalSourceType; first
+# match wins, so specific credits precede the generic prefix. Measured on real
+# output 2026-09-23: Image Playground writes "Apple Image Playground" with
+# trainedAlgorithmicMedia; Photos Clean Up (device on iOS 27.0) writes
+# "Apple Photos Generative Edit: Clean Up" with compositeWithTrainedAlgorithmicMedia.
+# Neither carried C2PA. The Playground PNG records no OS version.
+_APPLE_CREDIT_PLATFORMS = (
+    (b"Apple Photos Generative Edit: Clean Up", "Apple Photos (Clean Up AI edit)"),
+    (b"Apple Photos Clean Up", "Apple Photos (Clean Up AI edit)"),
+    (b"Apple Photos Generative Edit", "Apple Photos (Generative Edit)"),
+    (b"Apple Image Playground", "Apple Image Playground"),
 )
 
 
@@ -1086,12 +1148,17 @@ def _collect_visible_signals(
     platform: str | None,
     decode: _SharedDecode,
     caveats: list[str],
+    *,
+    non_google_vendor: str | None = None,
 ) -> str | None:
     """Append every trusted visible-mark signal and return platform.
 
     All visible detectors share the one decoded BGR array held by ``decode`` (which
     the invisible detectors have usually already paid for). A decode failure
     preserves the detectors' historical fallback/no-op behavior.
+
+    ``non_google_vendor`` is an AI origin that stamped provenance names; a sparkle
+    score on such an image is read as texture, not as a Gemini mark.
     """
     image = decode.get_or_none()
     if image is None:
@@ -1107,7 +1174,9 @@ def _collect_visible_signals(
         return platform
 
     sparkle_conf = _visible_sparkle(image_path, image=image)
-    if sparkle_conf is not None and sparkle_conf >= _SPARKLE_THRESHOLD:
+    if sparkle_conf is not None and sparkle_conf >= _SPARKLE_THRESHOLD and non_google_vendor:
+        caveats.append(_SPARKLE_VETOED_CAVEAT.format(conf=sparkle_conf, vendor=non_google_vendor))
+    elif sparkle_conf is not None and sparkle_conf >= _SPARKLE_THRESHOLD:
         signals.append(Signal("visible_sparkle", f"NCC confidence {sparkle_conf:.2f}", "medium"))
         watermarks.append(f"Google Gemini visible watermark (sparkle; confidence {sparkle_conf:.2f})")
         if platform is None:
@@ -1158,7 +1227,11 @@ def _identify_from_evidence(
     # metadata rather than its pixels -- see `_metadata_region`. Every other check
     # below keeps the full buffer: their markers are long and distinctive.
     region = _metadata_region(head)
-    camera_label = _device_platform(region)
+    # Device tokens (``NIKON``, ``Pixel Camera``) are C2PA identity, so they are read
+    # from the manifest store: the same words in EXIF or XMP of an unrelated file must
+    # not claim a verified camera capture.
+    c2pa_store = _c2pa_store_bytes(head, region)
+    camera_label = _device_platform(c2pa_store)
 
     # ── C2PA Content Credentials ────────────────────────────────────
     has_c2pa = bool(info) or c2pa_marker_in(head)
@@ -1168,8 +1241,14 @@ def _identify_from_evidence(
     # The reader already named which failures moved a dimension; re-deriving that here
     # by substring made the displayed reason a second, looser rule than the verdict.
     failed_c2pa_codes = [str(code) for code in cast("list[object]", info.get("c2pa_failed_codes", []))]
-    issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(region)
-    signer_label = _signer_platform(region, issuers)
+    # A manifest the reader decoded is judged on its decoded strings alone: nothing
+    # (signer, signer platform, SynthID vendor) is re-derived from its raw bytes, where
+    # the Canva token sits inside an Amazon Bedrock "Nova Canvas" agent. The byte scans
+    # read the store only when the reader could not open the manifest.
+    reader_decoded = info.get("c2pa_validation_source") == "reader"
+    store = b"" if reader_decoded else c2pa_store
+    issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(store)
+    signer_label = _signer_platform(store, issuers)
     # Full AI generation (trainedAlgorithmicMedia) vs an AI-enhanced real photo
     # (compositeWithTrainedAlgorithmicMedia). The structured kind is parsed once in
     # _internal.c2pa._structured_manifest_fields (covers PNG + any container the c2pa-python
@@ -1193,8 +1272,9 @@ def _identify_from_evidence(
     # identified by `_device_platform`.
     generator = (
         info.get("claim_generator")
-        or cbor_text_after(head, b"claim_generator")
-        or (", ".join(tools) if (tools := _ai_tools_in(region)) else None)
+        or (None if reader_decoded else cbor_text_after(head, b"claim_generator"))
+        or (info.get("ai_tool") if reader_decoded else ", ".join(_ai_tools_in(region)))
+        or None
     )
     # Platform: a distinctive device/camera token in the manifest wins (it is the
     # signer/producer), then an exact product generator, then an editing-app or
@@ -1208,8 +1288,17 @@ def _identify_from_evidence(
             # Exact product generators are useful provenance even when the
             # signed operation is a non-AI edit (for example, CapCut).
             or claim_generator_platform(generator)
-            or signer_label
+            # An AI product generator recorded under a generic re-signer beats the
+            # signer's own label: Dreamina exports carry a "Dreamina/7.5.0"
+            # ingredient under an active "ByteDance Media Transcode Service"
+            # claim (measured 2026-09-24).
             or (claim_generator_platform(str(info.get("ai_tool"))) if c2pa_is_ai and info.get("ai_tool") else None)
+            or signer_label
+            or (
+                _GOOGLE_PHOTOS_EDIT
+                if c2pa_is_ai and source_kind == "enhanced" and "Google Photos" in issuer_blob
+                else None
+            )
             or _attribute_platform(issuers, is_ai=c2pa_is_ai)
         )
         if has_c2pa and c2pa_usable
@@ -1275,7 +1364,7 @@ def _identify_from_evidence(
     # through `identify` and not through the record, because `get_ai_metadata`'s own
     # fallback has no counterpart on the record side. `get_ai_metadata` keeps its copy
     # for its own callers; the verdict no longer depends on which extractor ran.
-    synthid = meta.get("synthid_watermark")
+    synthid = meta.get("synthid_watermark") or info.get("synthid_watermark")
     # The literal byte checks mirror `metadata.synthid_source` exactly rather than
     # reusing the derived `has_c2pa` / `source_kind` above, which are broader:
     # the file path's answer must not move.
@@ -1287,7 +1376,7 @@ def _identify_from_evidence(
     # read as "SynthID per OpenAI"). Fingerprints do not suppress independent
     # SynthID evidence; an unknown algorithm stays fail-safe as a possible mark.
     soft_binding_algorithm = meta.get("soft_binding_algorithm") or info.get("soft_binding_algorithm")
-    soft_binding_scan = region
+    soft_binding_scan = b"" if reader_decoded else region
     if soft_binding_algorithm:
         soft_binding_scan += b"\n" + str(soft_binding_algorithm).encode("utf-8", "replace")
     soft_binding_entries = soft_binding_registry_entries_in(soft_binding_scan)
@@ -1302,7 +1391,7 @@ def _identify_from_evidence(
         and trained_source
         and c2pa_marker_in(head)
         and not soft_binding_blocks_synthid
-        and (vendors := synthid_evidence_vendors_in(region))
+        and (vendors := synthid_evidence_vendors_in(store))
     ):
         synthid = synthid_verdict(", ".join(vendors))
     if synthid:
@@ -1312,6 +1401,8 @@ def _identify_from_evidence(
             else f"SynthID watermark claimed by invalid C2PA credentials ({synthid})"
         )
         caveats.append(_SYNTHID_CAVEAT)
+        if any("Google Photos" in issuer for issuer in issuers):
+            caveats.append(_GOOGLE_PHOTOS_SYNTHID_CAVEAT)
         if c2pa_usable and (v := _vendor_of(synthid)):
             ai_vendor_claims["synthid"] = v
 
@@ -1360,11 +1451,11 @@ def _identify_from_evidence(
         signals.append(Signal("iptc", "digitalSourceType (Made with AI)", "high"))
         watermarks.append("IPTC digitalSourceType (Made with AI)")
         caveats.append(_IPTC_ONLY_CAVEAT)
-        # Apple Photos Clean Up carries an explicit product credit beside the shared
-        # IPTC value. Without such product-specific evidence the standard names no
-        # platform and must not imply a vendor watermark.
-        if platform is None and b"Apple Photos Clean Up" in head:
-            platform = "Apple Photos (Clean Up AI edit)"
+        # Apple Intelligence surfaces carry an explicit photoshop:Credit beside the
+        # shared IPTC value. Without such product-specific evidence the standard
+        # names no platform and must not imply a vendor watermark.
+        if platform is None:
+            platform = next((name for credit, name in _APPLE_CREDIT_PLATFORMS if credit in head), None)
 
     # ── IPTC 2025.1 AI-disclosure fields (Iptc4xmpExt:AISystemUsed etc.) ─
     iptc_ai = any(m in head for m in IPTC_AI_FIELD_MARKERS)
@@ -1425,17 +1516,19 @@ def _identify_from_evidence(
             platform = "xAI (Grok / Aurora)"
         ai_vendor_claims["xai"] = "xAI"
 
-    # ── Hugging Face-hosted job marker (hf-job-id PNG text chunk) ─────
-    # Marks the hosting job, not a model -- medium confidence (commonly diffusion
-    # output). Like the visible sparkle, it lifts an otherwise-Unknown verdict to
-    # a tentative AI, but never overrides a high-confidence metadata signal.
+    # ── Higgsfield job marker (hf-job-id PNG text chunk) ─────────────
+    # Marks the hosting job, not a model -- medium confidence. Earlier releases read
+    # it as Hugging Face; Higgsfield output measured on 2026-09-24 carries it on every
+    # PNG, and no Hugging Face source documents it (the public API keeps the old
+    # names). Like the visible sparkle, it lifts an otherwise-Unknown verdict to a
+    # tentative AI, but never overrides a high-confidence metadata signal.
     hf_job = evidence.huggingface_job
     if hf_job:
-        signals.append(Signal("hf_job", f"Hugging Face job {hf_job}", "medium"))
-        watermarks.append("Hugging Face-hosted job (hf-job-id)")
+        signals.append(Signal("hf_job", f"Higgsfield job {hf_job}", "medium"))
+        watermarks.append("Higgsfield job (hf-job-id)")
         caveats.append(_HF_JOB_CAVEAT)
         if platform is None:
-            platform = "Hugging Face-hosted job (model not identified)"
+            platform = "Higgsfield (model not identified)"
 
     # ── Samsung Galaxy AI editing marker (genAIType) ─────────────────
     # Galaxy AI tools stamp a proprietary genAIType in PhotoEditor_Re_Edit_Data.
@@ -1498,7 +1591,16 @@ def _identify_from_evidence(
     )
 
     if check_visible and pixel_path is not None:
-        platform = _collect_visible_signals(pixel_path, signals, watermarks, platform, decode, caveats)
+        # A trusted provenance claim by another vendor vetoes the sparkle: sparkle
+        # scores on real Gemini images reach down to 0.55 while wood grain, UI and
+        # whiteboard photos reach 0.67, so no threshold separates them. Two
+        # Higgsfield downloads (a valid OpenAI C2PA, a Kuaishou TC260 label) scored
+        # 0.53 on wood texture (2026-09-24).
+        trusted_claims = {k: v for k, v in ai_vendor_claims.items() if k != "c2pa" or c2pa_level == "verified"}
+        non_google = next((v for v in trusted_claims.values() if v != "Google"), None)
+        platform = _collect_visible_signals(
+            pixel_path, signals, watermarks, platform, decode, caveats, non_google_vendor=non_google
+        )
 
     visible_only = any(s.name.startswith("visible_") for s in signals) and not ai_from_metadata
     hf_only = bool(hf_job) and not ai_from_metadata

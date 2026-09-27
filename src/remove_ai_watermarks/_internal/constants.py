@@ -107,8 +107,16 @@ C2PA_AI_VENDORS: tuple[C2paAiVendor, ...] = (
         "Dreamina",
         asserts_ai=True,
     ),
+    # Amazon Bedrock signs Nova Canvas images and Nova Reel video as "Amazon Web
+    # Services, Inc." with claim generator "Amazon Bedrock" (aws-samples outputs,
+    # checked 2026-09-26). Listed before Canva: the Nova Canvas software agent
+    # contains the Canva token, so a byte scan finds both.
+    _vendor(b"Amazon Web Services", "Amazon", "Amazon Bedrock (Nova)", "Amazon"),
     _vendor(b"Canva", "Canva", "Canva (Magic Media)", "Canva"),
     _vendor(b"Eleven Labs", "ElevenLabs", "ElevenLabs", "ElevenLabs"),
+    # fal signs as "fal - Features & Labels Inc." (common name "fal.ai"); "fal-ai" is
+    # its claim-generator and software-agent prefix, which only the byte fallback reads.
+    _vendor(b"Features & Labels", "fal.ai", "fal.ai", "fal.ai", asserts_ai=True),
     _vendor(b"fal-ai", "fal.ai", "fal.ai", "fal.ai", asserts_ai=True),
     _vendor(b"Bria", "Bria Artificial Intelligence", "Bria AI", "Bria", asserts_ai=True),
     # Ideogram signs its downloads' Content Credentials with "Ideogram, Inc"; the
@@ -164,10 +172,32 @@ C2PA_AI_VENDORS: tuple[C2paAiVendor, ...] = (
         None,
         signer_platform="ASUS Gallery (C2PA signer)",
     ),
+    # Certificate common name on Google Photos edits (Android and iOS). The
+    # manifest also names Google LLC, so an AI edit establishes Google SynthID
+    # (see ``SYNTHID_EDIT_SIGNERS``) and its platform label lives in ``identify``; an edited
+    # Gemini or OpenAI generation keeps its generator.
+    _vendor(b"Google Photos", "Google Photos", None, None),
+    # Runway signs only its own models (Gen-4 image, Gen-4.5 video, measured
+    # 2026-09-24: issuer "RUNWAY AI, INC.", software agent "Runway Image/Video
+    # Generation"); a third-party model run inside Runway keeps its vendor's own
+    # manifest (a Nano Banana 2 image came back with Google's). The C2PA
+    # conformance list spells the organization "Runway AI, Inc".
+    _vendor(b"RUNWAY AI, INC.", "Runway", "Runway", "Runway"),
+    _vendor(b"Runway AI, Inc", "Runway", "Runway", "Runway"),
     _vendor(b"Truepic", "Truepic", None, None),
 )
 
 C2PA_ISSUERS = {vendor.issuer: vendor.org for vendor in C2PA_AI_VENDORS}
+# Google signers that re-encode media rather than generate it, so their Google
+# LLC identity alone says nothing about SynthID. YouTube re-signs every upload
+# with "YouTube Video Processing Services" (opened and transcoded, measured
+# 2026-09-24): an xAI Grok video came back reading as Google SynthID. A manifest
+# from one of these signers establishes SynthID only when the chain records a
+# SynthID action, as a Gemini ingredient does. Google Photos is deliberately
+# absent: its manifests record no SynthID action, yet Google's checker found
+# SynthID on all four Photos AI edits tested (Ask, eraser and two other edits,
+# 2026-09-25), although Google documents the mark only for Reimagine.
+SYNTHID_EDIT_SIGNERS: tuple[bytes, ...] = (b"YouTube",)
 C2PA_IDENTITY_AI_ORGS = frozenset(vendor.org for vendor in C2PA_AI_VENDORS if vendor.asserts_ai)
 C2PA_SIGNER_PLATFORM_BY_ORG = {
     vendor.org: vendor.signer_platform for vendor in C2PA_AI_VENDORS if vendor.signer_platform is not None
@@ -294,6 +324,8 @@ AI_GENERATOR_TOKENS = frozenset(
         "lumalabs",
         "aphrodite ai",
         "apple photos clean up",
+        "apple photos generative edit",
+        "apple image playground",
         "fal-ai",
     }
 )

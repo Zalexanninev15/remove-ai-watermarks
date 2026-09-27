@@ -12,6 +12,9 @@ data/
                   (see fixtures/visible/README.md)
     synthetic/    Frozen synthetic renders that unit tests stamp onto frames, each
                   produced by the script named in the test that loads it
+  captures/
+    2026-09/      Provider outputs from the maintainer's own accounts, stored as
+                  served, indexed by manifest.csv (see its README)
   calibration/
     <vendor>/     Minimal controlled inputs needed to rebuild detector assets
   synthid/
@@ -53,9 +56,15 @@ evaluation outputs outside the repository.
    `evaluations/engine-selection/` is the bounded exception for ORIGINAL study
    inputs: its manifest tracks a prompt-matched OpenAI/Meta content matrix, not
    generated model outputs or watermark-oracle evidence.
-6. Keep third-party fixture license notices in `licenses/`, outside directories
+6. Put provider captures that no test reads in `captures/<yyyy-mm>/`, with a
+   `manifest.csv` row per capture. A capture that is also a fixture is stored
+   once, in `fixtures/`, and its manifest row points there. Request a new
+   capture only for a service x vendor pair not yet captured, or for a
+   service's own model: another version of a known pair adds no provenance
+   evidence.
+7. Keep third-party fixture license notices in `licenses/`, outside directories
    that tests enumerate as media inputs.
-7. Runtime detector assets belong in `src/remove_ai_watermarks/assets/`.
+8. Runtime detector assets belong in `src/remove_ai_watermarks/assets/`.
    Unregistered research candidates belong in
    `scripts/assets/visible-mark-candidates/` so they are not shipped in the
    wheel.

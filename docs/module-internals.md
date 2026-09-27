@@ -187,7 +187,15 @@ functions lazily.
 `identify_video` runs the same stable-mark selection helper as
 `remove_video_visible`, so a provenance report cannot authorize a mark that the
 removal path would reject. It reports an empty local result as unknown rather
-than clean. Identification skips the separate per-frame timestamp probe because
+than clean. A C2PA manifest alone is not an AI signal: `_video_markers_claim_ai`
+requires what the image path requires, an AI digital source type or disclosure,
+another AI marker (SynthID, TC260, xAI signature), or an AI-generator identity
+(a registered AI signer or an AI product as claim generator). Since YouTube
+re-signs every upload as Google LLC with only `opened` and `transcoded`, the
+earlier any-manifest rule read a re-encoded xAI Grok video as Google AI with
+SynthID (measured 2026-09-24, fixture `youtube-reencode-grok.mp4`); on the
+local video corpus the change also moved an Adobe Premiere Pro export and a
+Claude-provided file from AI to unknown and nothing else. Identification skips the separate per-frame timestamp probe because
 it never encodes frames. `remove_video_all` is the predictable-output
 composition: visible removal plus verified metadata stripping by default, with
 a same-container passthrough when neither signal exists. The lossy invisible
@@ -211,7 +219,10 @@ Native MP4/MOV TC260 labels follow TC260-PG-20257A:
 `moov.udta.meta.keys` maps an `AIGC` key to a raw JSON value in `ilst`.
 [`_internal/isobmff.py`](../src/remove_ai_watermarks/_internal/isobmff.py) walks those
 nested boxes by seeking, so detection reaches a tail `moov` without reading the
-preceding `mdat`. Two Doubao iOS variants sit outside that normative placement
+preceding `mdat`. The metadata record stores each such value behind its `AIGC`
+key: the bare JSON gave the record's scan parser no anchor, so three Higgsfield
+MP4s with a tail `moov` read as labeled from the file and unknown from their
+record until the key was kept (2026-09-24). Two Doubao iOS variants sit outside that normative placement
 and are covered by the same walker (2026-08-17 corpus findings, both previously
 undetected): a QuickTime-form `meta` box as a *direct* `moov` child (no FullBox
 header, disambiguated by probing the child-box offset), and a QuickTime
@@ -347,7 +358,7 @@ from the gate. The full-clip oracle floor is
 detected while `0.15` did not.
 
 [`video_visible.py`](../src/remove_ai_watermarks/video_visible.py) implements
-the first pixel stages for Sora, Veo, Seedance, Doubao, Dola, Hailuo AI, and Kling AI. The
+the first pixel stages for Sora, Veo, Seedance, Doubao, Dola, Hailuo AI, Vidu, and Kling AI. The
 Sora detector searches a normalized frame with fully synthetic
 mascot-and-text and mascot-only silhouettes at several scales. The mascot-only
 candidate must also correlate with the complete grayscale shape, including the
@@ -358,7 +369,11 @@ The Veo detector uses separate
 synthetic silhouettes for the current four-point diamond and legacy `Veo`
 text. Seedance uses a synthetic rounded boxed-`AI` silhouette, while Dola uses
 an OpenCV Hershey-font `Dola AI` silhouette. Hailuo AI uses a synthetic waveform,
-MINIMAX/Hailuo AI text, separator, and ring. Kling AI combines synthetic font
+MINIMAX/Hailuo AI text, separator, and ring. Vidu uses two outlined capsules
+leaning into a V plus a font-rendered `Vidu AI`, sized from the measured 1080p
+mark (232 x 50 px); its floors (0.52 weak, 0.58 strong) sit between the one real
+clip (0.72 at 480-1080p, 0.60 at 360p) and the maximum over the 956 other local
+videos (0.41), measured 2026-09-24. Kling AI combines synthetic font
 and capitalization variants with a ring approximation of its swirl. The Dola and
 Kling Hershey renders are frozen PNG assets drawn by OpenCV 4
 (`scripts/render_video_hershey_templates.py`): OpenCV 5 draws the same `putText`
@@ -375,13 +390,17 @@ normalized representations across all detectors, and caches resized synthetic
 template features for the fixed stream geometry. Provider confidence scales
 are not comparable: selection applies each provider's temporal arbiter and
 takes the first stable result in specificity order (`sora`, `veo`, `seedance`,
-`doubao`, `dola`, `hailuo`, `kling`). An explicit mark uses the same scan path with one
+`doubao`, `dola`, `hailuo`, `vidu`, `kling`). `vidu` precedes `kling` because the
+Kling detector also scores the Vidu wordmark. An explicit mark uses the same scan path with one
 candidate. Removal also collects authoritative per-frame timestamps for the
 encoder, while identification omits that unused ffprobe pass.
-The one cross-match exception selects Veo with valid Google AI-video
-provenance and no Sora provenance when a stable Veo diamond is substantially
-contained within the Sora localization, or Veo is stable on every frame while
-Sora is not. Metadata alone never selects a visible mark.
+Cross-matches between providers are settled by the provenance veto below: a
+Sora run on a clip with valid Google AI-video provenance and no Sora provenance
+is vetoed, so a stable Veo run selects Veo. Metadata alone never selects a
+visible mark. A narrower rule that switched to Veo only when the Veo diamond sat
+inside the Sora box, or Veo covered every frame and Sora did not, became
+unreachable once the veto covered every mark and was removed at the 2026-09-26
+merge; its credential rule survives in the veto.
 For metadata-only video identification, a recognized `claim_generator` takes
 precedence over certificate issuer names. Searching all marker values at once
 previously labeled a Google-generated video as OpenAI when both organizations
@@ -393,7 +412,8 @@ fill padding and mask style are one row in `VISIBLE_MARK_POLICIES`, and every ma
 enters the same `stabilize_localizations` entry point; the recurrence
 implementation underneath knows nothing about providers. That policy row also
 carries `accepts_provenance`, which forces `provenance=False` for Kling AI.
-Hailuo AI accepts an explicit MiniMax TC260 producer. Doubao accepts its
+Hailuo AI accepts an explicit MiniMax TC260 producer, and Vidu the ShengShu
+USCC `91110108MACC4D63XF`. Doubao accepts its
 registry-listed TC260 producer codes, including their structured USCC form;
 an unrelated or absent producer does not confirm Doubao. Provenance can relax a low-contrast run only
 after recurring visual evidence exists. Sora transition frames follow the
@@ -402,7 +422,41 @@ Dola, Hailuo AI, and Kling AI additionally require candidates to remain anchored
 start of a run. This rejects slowly drifting scene details that still have
 high frame-to-frame overlap. Technical encoder tags do not establish provider
 provenance. Hailuo AI confirmation requires its explicit producer marker,
-while Kling AI remains visual-only.
+while Kling AI remains visual-only. Provenance can still veto any video mark
+(`contradicts_video_provenance`): a C2PA manifest that records
+`trainedAlgorithmicMedia` under an issuer outside the mark's own vendor
+(`_VIDEO_MARK_ISSUER_TOKENS`), and for Kling also a TC260 producer outside the
+Kling row's codes (which include the bare `kling` Higgsfield writes). The C2PA
+rule came from a Veo 3.1 Lite clip whose wood texture matched Kling on every
+frame at 0.61, and was widened to every mark after a Gemini Omni 1.1 Flash clip
+from Runway (2026-09-25) matched Sora on a steam wisp at 0.61-0.67 for five
+frames, a stable run above the strict floor. A re-signing platform such as
+YouTube records no source type and vetoes nothing. An invalid credential
+(`c2pa_credential_level`) vetoes nothing, and provenance that also confirms the
+mark's own vendor (`confirms_video_provenance`: a `Sora` claim generator under
+a Google issuer) confirms instead of vetoing. Provenance cannot veto a clip that really is Kling, so the swirl arm of
+`detect_kling_frame` now passes the same `_reaches_kling_edge` test as the
+wordmark arm: on Higgsfield's Cinema Studio v2 (a Kling model, TC260 producer
+`kling`) the swirl matched wood grain at 0.52-0.56 with its box 11% short of the
+right edge, and the run covered every frame. `detect_hailuo_frame` likewise
+rejects a box with under `_HAILUO_MIN_WHITE_FRACTION` bright low-saturation
+pixels: Hailuo 2.3 scored 0.33-0.35 on wood grain, above the real label's 0.31,
+with no white pixel in the box (real label 1.00, synthetic example 0.15).
+Neither gate stopped a Higgsfield Genjutsu clip whose wordmark arm matched wood
+grain at the frame edge (0.22-0.32, white highlights included). Across 1008
+local videos the per-frame Kling score was no discriminator at all: the top
+clip, an OpenArt export, scored 0.81 against the real overlay's 0.63, and 68
+inspected clips between 0.24 and 0.81 showed no Kling mark. What does separate
+them is geometry over time: the real overlay's box is identical on every frame,
+texture matches drift, so the Kling policy tightens `anchor_iou` from 0.80 to
+0.95.
+
+A video TC260 label names its platform through `_tc260_video_platform`: the
+Kling, Doubao, Qwen and Wan registry codes, the Vidu constant, and the bare
+`MiniMax`. The labels name the producer organization, because the Tongyi Yunqi
+code signs both Wan and HappyHorse. An unregistered producer keeps the generic
+"China AIGC-labeled content (TC260 standard)". The image path keeps that generic
+platform for every producer and records the manufacturer only for clash checks.
 
 Removal runs in a second decode pass. Sora, legacy Veo text, Dola text,
 Seedance, Hailuo AI, and Kling AI use box masks. Seedance deliberately fills the
@@ -636,6 +690,36 @@ metadata extraction from verdict logic:
   compressed data one turns up by chance, and the entry it hits may assert AI. The
   trim happens only when the container parses -- a malformed or unknown one is left
   whole, because dropping real evidence to avoid a chance match is the wrong trade.
+  When the reader could not open the manifest, the issuer and signer scan narrows
+  further to the manifest store the container locates (`_c2pa_store_bytes`: JPEG
+  APP11, PNG `caBX`): an XMP packet names Adobe in its toolkit string, and a vivo
+  X300 capture was labeled "C2PA signer: Adobe" from it (2026-09-26).
+- Registry tokens are matched two ways, by what the text is. Decoded manifest
+  strings (signer, claim generator, software agent, and the video metadata
+  markers) use `registry_word_matches`: the token must stand as a whole word, so
+  `Canva` no longer matches `Nova Canvas`. Raw bytes cannot use that rule. Over
+  every C2PA file in the local corpus (1,379 files, 2026-09-26), 374 of 37,325
+  token matches in the manifest store had a letter or digit beside them, nearly all
+  of it framing: a CBOR text header before the token (`iMicrosoft`, 0x69 = length
+  9) or a DER tag after it (`OpenAI1`, `Sora0`). The only continuation that named
+  the wrong vendor was `Canva|s`; `Adobe|Product` sat in an Adobe manifest. So raw
+  bytes decide nothing once the reader has decoded the manifest: not the signer
+  (an unregistered one stays unknown, where the byte scan had read the Amazon
+  Bedrock image as Canva), not a signer-platform token, not the AI-tool fallback
+  for the generator, not a raw `claim_generator` CBOR value, not a soft-binding
+  identifier, and not the SynthID vendor inference, in `identify` and in
+  `metadata.synthid_source` alike; the verdict reads SynthID from the decoded
+  C2PA info when the metadata dict lacks it. Claim-generator tokens also match as whole
+  words (`claim_generator_platform`: `suno` no longer matches `Sunoco`), and so do
+  the C2PA vendor needles the video path reads (`c2pa_vendor_platform`). The byte scans remain only for
+  manifests the reader cannot open (1 of the 1,379), and verdicts over all 1,379
+  were unchanged by the rule. Device tokens (`NIKON`, `Pixel Camera`, `sony.sig`)
+  exist only in raw bytes, so they stay a byte scan, but of the manifest store:
+  the same word as an EXIF Make beside an unrelated AI manifest is not a verified
+  capture. The source-kind scan is left on the whole buffer on purpose, because it
+  also reads IPTC `digitalSourceType` in XMP, a signal outside C2PA. The byte
+  fallback's `c2pa.ai-disclosure` kind now uses the structured path's rule
+  (`_disclosure_kind`): `human_validated` beside `prompt_guided` is a generation.
 - `identify_from_evidence` evaluates that evidence without reopening the source. Rules
   that decide a verdict live here, not in extraction: extraction has two
   implementations, and a rule in only one of them is a rule the other lacks. The
@@ -1463,11 +1547,23 @@ metadata uploads, not another synthetic guess. `_apply_false_positive_gate` logs
 `DEBUG` on the exact bypass path this incident hit, to build that corpus from
 production occurrences.
 
+Texture reaches the trust gate too. A local sweep on 2026-09-24 found non-Gemini
+images scoring up to 0.67 (whiteboard photos, UI screenshots, digital art) while
+real Google-signed sparkles went as low as 0.55, and two Higgsfield downloads
+scored 0.53 on wood grain. No threshold separates those, so `identify` passes
+`_collect_visible_signals` the first non-Google AI vendor from the trusted
+vendor claims (C2PA only when verified) and drops a sparkle on such an image
+with `_SPARKLE_VETOED_CAVEAT`. Google provenance never vetoes. The removal
+arbitration does not see these claims.
+
 Regression coverage:
 
 - [`test_gemini_engine.py`](../tests/test_gemini_engine.py), including
   `TestDecorativeGlyphFalsePositive` pinning the confirmed false positive and its
   blocking counter-example.
+- [`test_identify.py`](../tests/test_identify.py)
+  `test_non_google_provenance_vetoes_a_sparkle_on_texture` and
+  `test_google_provenance_keeps_the_sparkle`.
 
 ### Text mark engines
 
@@ -1695,6 +1791,21 @@ removal leaves behind, which otherwise re-fires detection at 0.45. No real
 actual vendor output -- treat this
 detector as weaker evidence than the brand-tuned engines above until it is
 recalibrated on real captures.
+
+#### Wan logo and wordmark
+
+Registered 2026-09-24 from one real Wan 2.7 Pro export (2048 px square, neutral
+scene, `data/fixtures/visible/wan/provider-original.png`). The mark measures
+0.131 x 0.050 of the short side with ~0.005 margins; the synthetic silhouette is
+`draw_wan` in `scripts/render_vendor_silhouettes.py` (a cut hexagon plus Avenir
+Next Demi Bold `Wan`, parameters picked by best match on the real mark, 0.66).
+NCC alone separates poorly: 3092 local images (every tracked fixture plus 3000
+sampled) reached 0.519. The mark hugs the corner, so `WanEngine._post_gate`
+also requires the match to end within 0.015 of the short side from both edges;
+with that anchor no negative scored 0.45 or above. The gate is NCC >= 0.55 plus
+the anchor, strict only. The TC260 producer is Tongyi Yunqi (Hangzhou), USCC
+`91330106MA2CFLDG4R`. Calibration stays provisional until a wider Wan cohort
+exists.
 
 #### OpenArt wordmark
 
@@ -2126,8 +2237,10 @@ recorded in
 runs the same two-stage recipe on a Chroma1-HD (`lodestones/Chroma1-HD`,
 Apache-2.0) global pass through diffusers' `ChromaImg2ImgPipeline`. It is the
 answer to issue #88's FLUX.2 request through the model that actually exposes
-strength-controlled img2img in that family; the full research record,
-including why FLUX.2 itself is not integrable this way, is
+strength-controlled img2img in that family. diffusers has since added
+`Flux2KleinInpaintPipeline` with a real strength path, so the earlier "FLUX.2
+is not integrable" conclusion is superseded pending a measured FLUX.2 klein
+stage; the full research record is
 [`chroma1-engine-research.md`](chroma1-engine-research.md).
 
 The profile also implements the shared verified-text donor hook through its already

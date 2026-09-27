@@ -25,6 +25,7 @@ from remove_ai_watermarks._internal.constants import (
     C2PA_SOFT_BINDING_REGISTRY,
     C2PA_SOFT_BINDINGS,
     PNG_SIGNATURE,
+    SYNTHID_EDIT_SIGNERS,
     C2paSoftBindingAlgorithm,
 )
 
@@ -353,22 +354,23 @@ def c2pa_credential_level(info: dict[str, Any]) -> str:
 
 
 def claim_generator_platform(generator: str | None) -> str | None:
-    """Resolve a distinctive C2PA claim generator to its user-facing product."""
+    """The product a claim-generator string names by a whole-word registry token, else None."""
     if not generator:
         return None
-    lowered = generator.lower()
-    return next((platform for token, platform in C2PA_CLAIM_GENERATOR_PLATFORMS if token in lowered), None)
+    return _first_word_match(generator.casefold(), _CLAIM_GENERATOR_TOKENS)
 
 
-_VENDOR_PLATFORM_NEEDLES = tuple(
-    (vendor.needle.casefold(), vendor.platform) for vendor in C2PA_AI_VENDORS if vendor.platform and vendor.needle
-)
+_CLAIM_GENERATOR_TOKENS = {token.encode(): platform for token, platform in C2PA_CLAIM_GENERATOR_PLATFORMS}
+_VENDOR_PLATFORM_NEEDLES = {
+    vendor.needle.casefold().encode(): vendor.platform
+    for vendor in C2PA_AI_VENDORS
+    if vendor.platform and vendor.needle
+}
 
 
 def c2pa_vendor_platform(text: str) -> str | None:
-    """Platform of the first C2PA AI vendor whose needle appears in ``text``, case-insensitively."""
-    folded = text.casefold()
-    return next((platform for needle, platform in _VENDOR_PLATFORM_NEEDLES if needle in folded), None)
+    """Platform of the first C2PA AI vendor ``text`` names as a whole word, case-insensitively."""
+    return _first_word_match(text.casefold(), _VENDOR_PLATFORM_NEEDLES)
 
 
 def c2pa_info_has_invismark(info: dict[str, Any]) -> bool:
@@ -461,6 +463,45 @@ def _claim_generator_from_store(store: dict[str, Any]) -> str | None:
     return None
 
 
+# c2pa.ai-disclosure (C2PA 2.4, section 18.28) states that a trained model produced
+# the asset. Its humanOversightLevel maps onto the existing source kinds per the
+# spec's own table in 18.28.3: human_validated pairs with
+# compositeWithTrainedAlgorithmicMedia, fully_autonomous and prompt_guided with
+# trainedAlgorithmicMedia. It only decides the kind when no digitalSourceType did.
+_AI_DISCLOSURE_ENHANCED_LEVELS = frozenset({"human_validated"})
+_AI_DISCLOSURE_LEVELS = (*_AI_DISCLOSURE_ENHANCED_LEVELS, "fully_autonomous", "prompt_guided")
+
+
+def _disclosure_kind(oversight: list[str]) -> str:
+    """The source kind a set of humanOversightLevel values implies (spec 18.28.3)."""
+    if oversight and all(level in _AI_DISCLOSURE_ENHANCED_LEVELS for level in oversight):
+        return "enhanced"
+    return "generated"
+
+
+def _apply_ai_disclosures(disclosures: list[dict[object, object]], info: dict[str, Any]) -> str | None:
+    """Record ``c2pa.ai-disclosure`` fields and return the source kind they imply."""
+    if not disclosures:
+        return None
+    models: list[str] = []
+    oversight: list[str] = []
+    for disclosure in disclosures:
+        for key in ("modelName", "modelIdentifier", "modelType"):
+            value = disclosure.get(key)
+            if isinstance(value, str) and value.isprintable() and len(value) <= 256:
+                models.append(value)
+                break
+        profile = disclosure.get("contentProfile")
+        if isinstance(profile, dict):
+            level = cast("dict[object, object]", profile).get("humanOversightLevel")
+            if isinstance(level, str):
+                oversight.append(level)
+    info["ai_disclosure"] = ", ".join(dict.fromkeys(models)) or "present"
+    if oversight:
+        info["human_oversight"] = ", ".join(dict.fromkeys(oversight))
+    return _disclosure_kind(oversight)
+
+
 def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
     """Extract provenance only from the active manifest and its ingredient graph."""
     chain = _manifest_chain(store)
@@ -471,6 +512,7 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
     issuers: list[str] = []
     tools: list[str] = []
     actions: list[str] = []
+    ai_disclosures: list[dict[object, object]] = []
     source_types: list[str] = []
     soft_binding_algorithms: list[str] = []
     soft_binding_values: list[str] = []
@@ -480,10 +522,11 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
     # ImageGen" softwareAgent) is a service name, not that vendor's provenance.
     identity_strings: list[str] = []
     claim_generator_asserts_ai = False
+    records_synthid_action = False
 
     def add_tool_matches(value: str, *, asserts_ai: bool = False) -> None:
         nonlocal claim_generator_asserts_ai
-        matches = _ordered_matches(value.encode(), C2PA_AI_TOOLS)
+        matches = registry_word_matches(value, C2PA_AI_TOOLS)
         tools.extend(matches)
         if asserts_ai and matches:
             claim_generator_asserts_ai = True
@@ -495,8 +538,16 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
             for key in ("issuer", "common_name", "certificate_issuer"):
                 value = signature.get(key)
                 if isinstance(value, str):
-                    issuers.extend(_ordered_matches(value.encode(), C2PA_ISSUERS))
+                    issuers.extend(registry_word_matches(value, C2PA_ISSUERS))
                     identity_strings.append(value)
+
+        ingredient_values = manifest.get("ingredients")
+        if isinstance(ingredient_values, list):
+            for ingredient_value in cast("list[object]", ingredient_values):
+                if isinstance(ingredient_value, dict):
+                    ingredient_source = cast("dict[object, object]", ingredient_value).get("digitalSourceType")
+                    if isinstance(ingredient_source, str):
+                        source_types.append(ingredient_source)
 
         direct_generator = manifest.get("claim_generator")
         if isinstance(direct_generator, str):
@@ -535,6 +586,16 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
                             value = cast("dict[object, object]", block_value).get("value")
                             if isinstance(value, str) and value.isprintable() and len(value) <= 256:
                                 soft_binding_values.append(value)
+            if isinstance(label, str) and label.startswith("c2pa.ingredient") and isinstance(data, dict):
+                # C2PA 2.4 lets an ingredient added without its own manifest carry
+                # digitalSourceType directly (spec 2.4, change log section 5.3.1).
+                ingredient_source = cast("dict[object, object]", data).get("digitalSourceType")
+                if isinstance(ingredient_source, str):
+                    source_types.append(ingredient_source)
+                continue
+            if isinstance(label, str) and label.startswith("c2pa.ai-disclosure") and isinstance(data, dict):
+                ai_disclosures.append(cast("dict[object, object]", data))
+                continue
             if not (isinstance(label, str) and label.startswith("c2pa.actions") and isinstance(data, dict)):
                 continue
             action_values = cast("dict[object, object]", data).get("actions")
@@ -547,6 +608,9 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
                 action_name = action.get("action")
                 if isinstance(action_name, str):
                     actions.append(C2PA_ACTIONS.get(action_name.encode(), action_name.removeprefix("c2pa.")))
+                description = action.get("description")
+                if isinstance(description, str) and "SynthID" in description:
+                    records_synthid_action = True
                 source_type = action.get("digitalSourceType")
                 if isinstance(source_type, str):
                     source_types.append(source_type)
@@ -575,10 +639,13 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
     )
     enhanced = any("compositeWithTrainedAlgorithmicMedia" in value for value in source_types)
     procedural = any("algorithmicMedia" in value for value in source_types)
+    disclosure_kind = _apply_ai_disclosures(ai_disclosures, info)
     if generated:
         info.update(source_type="trainedAlgorithmicMedia (AI-generated)", ai_source_kind="generated")
     elif enhanced:
         info.update(source_type="compositeWithTrainedAlgorithmicMedia (AI-enhanced)", ai_source_kind="enhanced")
+    elif disclosure_kind is not None:
+        info.update(source_type=f"c2pa.ai-disclosure ({disclosure_kind})", ai_source_kind=disclosure_kind)
     elif procedural:
         info["source_type"] = "algorithmicMedia"
 
@@ -598,7 +665,11 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
         # registered fingerprint does not suppress an independently established
         # SynthID watermark; a watermark or unknown algorithm does.
         identity_bytes = json.dumps(identity_strings, ensure_ascii=False).encode()
-        synthid = synthid_evidence_vendors_in(identity_bytes, has_watermark_action=has_watermark_action)
+        synthid = synthid_evidence_vendors_in(
+            identity_bytes,
+            has_watermark_action=has_watermark_action,
+            records_synthid_action=records_synthid_action,
+        )
         if synthid:
             info["synthid_vendors"] = synthid
             info["synthid_watermark"] = synthid_verdict(", ".join(synthid))
@@ -619,24 +690,39 @@ def synthid_verdict(vendors: str) -> str:
     return f"present according to {vendors} provenance"
 
 
-def synthid_evidence_vendors_in(buffer: bytes, *, has_watermark_action: bool | None = None) -> list[str]:
+def synthid_evidence_vendors_in(
+    buffer: bytes,
+    *,
+    has_watermark_action: bool | None = None,
+    records_synthid_action: bool | None = None,
+) -> list[str]:
     """List issuers whose provenance establishes SynthID for this asset.
 
     Google applies SynthID to all media generated by its tools, so its AI C2PA
-    provenance is sufficient. OpenAI C2PA predates OpenAI's SynthID rollout;
+    provenance is sufficient, Google Photos AI edits included. YouTube, which
+    re-signs every upload, is the exception: a ``SYNTHID_EDIT_SIGNERS`` manifest
+    needs a recorded SynthID action. OpenAI C2PA predates OpenAI's SynthID rollout;
     current manifests distinguish the watermarked generation with the explicit
     ``c2pa.watermarked.*`` action. A legacy OpenAI issuer token alone therefore
     remains provenance evidence, but not SynthID evidence.
     """
     if has_watermark_action is None:
         has_watermark_action = b"c2pa.watermarked" in buffer
+    if records_synthid_action is None:
+        records_synthid_action = b"SynthID" in buffer
+    # An edit signer without a recorded SynthID action leaves only the vendors whose
+    # SynthID rests on an explicit watermark action, never on identity alone.
+    identity_suffices = records_synthid_action or not any(signer in buffer for signer in SYNTHID_EDIT_SIGNERS)
     return sorted(
         {
             vendor.org
             for vendor in C2PA_AI_VENDORS
             if vendor.synthid
             and vendor.issuer in buffer
-            and (has_watermark_action or not vendor.synthid_requires_watermark_action)
+            and (
+                (has_watermark_action and vendor.synthid_requires_watermark_action)
+                or (identity_suffices and not vendor.synthid_requires_watermark_action)
+            )
         }
     )
 
@@ -669,6 +755,31 @@ def _ordered_matches(buffer: bytes, registry: dict[bytes, str]) -> list[str]:
     return list(dict.fromkeys(label for token, label in registry.items() if token in buffer))
 
 
+def registry_word_matches(text: str, registry: dict[bytes, str]) -> list[str]:
+    """Registry labels whose token appears in ``text`` as a whole word.
+
+    For decoded manifest strings only. A raw substring match named Canva for the
+    "Nova Canvas" software agent of an Amazon Bedrock image; inside a decoded string
+    a letter or digit next to the token is always a longer word. Raw manifest bytes
+    cannot use this rule: CBOR length headers and DER tags sit next to real tokens
+    as letters and digits (``iMicrosoft``, ``OpenAI1``), measured over every C2PA
+    file in the local corpus on 2026-09-26.
+    """
+    return list(
+        dict.fromkeys(label for token, label in registry.items() if _word_pattern(token).search(text) is not None)
+    )
+
+
+def _first_word_match(text: str, registry: dict[bytes, str]) -> str | None:
+    """The first registry label, in registry order, whose token is a whole word of ``text``."""
+    return next((label for token, label in registry.items() if _word_pattern(token).search(text) is not None), None)
+
+
+@functools.cache
+def _word_pattern(token: bytes) -> re.Pattern[str]:
+    return re.compile(r"(?<![A-Za-z0-9])" + re.escape(token.decode("utf-8")) + r"(?![A-Za-z0-9])")
+
+
 def _populate_registry_fields(buffer: bytes, info: dict[str, Any]) -> bool:
     issuers = _ordered_matches(buffer, C2PA_ISSUERS)
     tools = _ordered_matches(buffer, C2PA_AI_TOOLS)
@@ -686,6 +797,10 @@ def _populate_registry_fields(buffer: bytes, info: dict[str, Any]) -> bool:
         ai_source = True
     elif b"compositeWithTrainedAlgorithmicMedia" in buffer:
         info.update(source_type="compositeWithTrainedAlgorithmicMedia (AI-enhanced)", ai_source_kind="enhanced")
+        ai_source = True
+    elif b"c2pa.ai-disclosure" in buffer:
+        kind = _disclosure_kind([level for level in _AI_DISCLOSURE_LEVELS if level.encode() in buffer])
+        info.update(source_type=f"c2pa.ai-disclosure ({kind})", ai_source_kind=kind, ai_disclosure="present")
         ai_source = True
     elif b"algorithmicMedia" in buffer:
         info["source_type"] = "algorithmicMedia"

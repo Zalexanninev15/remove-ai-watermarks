@@ -911,3 +911,37 @@ class TextMarkEngine:
 
         d = dilate if dilate is not None else max(3, int(0.02 * loc.w))
         return region_eraser.boxes_to_mask((h, w), [(rx1, ry1, rx2 - rx1, ry2 - ry1)], dilate=d)
+
+
+class BottomRightAnchoredEngine(TextMarkEngine):
+    """A text mark that must end within ``_ANCHOR_MAX_RIGHT`` / ``_ANCHOR_MAX_BOTTOM`` of the corner.
+
+    Both margins are fractions of the short side (Yuanbao, Wan). A shared post-gate
+    rather than a ``detect`` override, so the single-pass perception path
+    (``detect_both``) cannot skip it.
+    """
+
+    _ANCHOR_MAX_RIGHT: float
+    _ANCHOR_MAX_BOTTOM: float
+
+    def _post_gate(self, det: TextMarkDetection, scan: TextMarkScan) -> TextMarkDetection:
+        if not det.detected or scan.loc is None:
+            return det
+        box = det.match_box  # the sweep the scan already ran on this same loc
+        if box is None:
+            det.detected = False
+            return det
+        h, w = scan.frame
+        base = min(h, w)
+        right = (w - (scan.loc.x + box[2] + 1)) / base
+        bottom = (h - (scan.loc.y + box[3] + 1)) / base
+        if not (0 <= right <= self._ANCHOR_MAX_RIGHT and 0 <= bottom <= self._ANCHOR_MAX_BOTTOM):
+            logger.debug(
+                "%s detect: score %.3f but match off-anchor (right=%.3f bottom=%.3f); demoting.",
+                self.config.name,
+                det.confidence,
+                right,
+                bottom,
+            )
+            det.detected = False
+        return det
