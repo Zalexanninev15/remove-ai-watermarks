@@ -18,6 +18,7 @@ from remove_ai_watermarks._internal.constants import (
     C2PA_AI_TOOLS,
     C2PA_AI_VENDORS,
     C2PA_CHUNK_TYPE,
+    C2PA_CLAIM_GENERATOR_PLATFORMS,
     C2PA_IDENTITY_AI_ORGS,
     C2PA_ISSUERS,
     C2PA_SIGNATURES,
@@ -726,6 +727,15 @@ def registry_word_matches(text: str, registry: dict[bytes, str]) -> list[str]:
     return list(
         dict.fromkeys(label for token, label in registry.items() if _word_pattern(token).search(text) is not None)
     )
+
+
+_CLAIM_GENERATOR_TOKENS = {token.encode(): platform for token, platform in C2PA_CLAIM_GENERATOR_PLATFORMS}
+
+
+def claim_generator_word_platform(generator: str) -> str | None:
+    """The product a claim-generator string names by a whole-word registry token, else None."""
+    matches = registry_word_matches(generator.casefold(), _CLAIM_GENERATOR_TOKENS)
+    return matches[0] if matches else None
 
 
 @functools.cache

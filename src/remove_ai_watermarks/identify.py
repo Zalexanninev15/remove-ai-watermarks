@@ -32,6 +32,7 @@ from remove_ai_watermarks._internal.c2pa import (
     c2pa_info_has_invismark,
     c2pa_info_has_removal_hint,
     cbor_text_after,
+    claim_generator_word_platform,
     extract_c2pa_info,
     soft_binding_labels,
     soft_binding_registry_entries_in,
@@ -42,7 +43,6 @@ from remove_ai_watermarks._internal.constants import (
     C2PA_AI_TOOLS,
     C2PA_AI_VENDORS,
     C2PA_CHUNK_TYPE,
-    C2PA_CLAIM_GENERATOR_PLATFORMS,
     C2PA_IDENTITY_AI_ORGS,
     C2PA_ISSUERS,
     C2PA_SIGNER_PLATFORM_BY_ORG,
@@ -831,8 +831,7 @@ def _claim_generator_platform(generator: str | None) -> str | None:
     """Resolve a distinctive C2PA claim generator to its user-facing product."""
     if not generator:
         return None
-    lowered = generator.lower()
-    return next((platform for token, platform in C2PA_CLAIM_GENERATOR_PLATFORMS if token in lowered), None)
+    return claim_generator_word_platform(generator)
 
 
 # Coarse origin-vendor normalization for integrity-clash detection. Two signals
@@ -1260,17 +1259,13 @@ def _identify_from_evidence(
     # The reader already named which failures moved a dimension; re-deriving that here
     # by substring made the displayed reason a second, looser rule than the verdict.
     failed_c2pa_codes = [str(code) for code in cast("list[object]", info.get("c2pa_failed_codes", []))]
-    store = _c2pa_store_bytes(head, region)
-    # A manifest the reader decoded names its signer in ``info`` or not at all: an
-    # unregistered signer must not be re-derived from raw bytes, where the Canva token
-    # sits inside an Amazon Bedrock "Nova Canvas" agent. Bytes decide only when the
-    # reader could not open the manifest.
-    if info.get("issuer"):
-        issuers = [info["issuer"]]
-    elif info.get("c2pa_validation_source") == "reader":
-        issuers = []
-    else:
-        issuers = _issuers_in(store)
+    # A manifest the reader decoded is judged on its decoded strings alone: nothing
+    # (signer, signer platform, SynthID vendor) is re-derived from its raw bytes, where
+    # the Canva token sits inside an Amazon Bedrock "Nova Canvas" agent. The byte scans
+    # read the store only when the reader could not open the manifest.
+    reader_decoded = info.get("c2pa_validation_source") == "reader"
+    store = b"" if reader_decoded else _c2pa_store_bytes(head, region)
+    issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(store)
     signer_label = _signer_platform(store, issuers)
     # Full AI generation (trainedAlgorithmicMedia) vs an AI-enhanced real photo
     # (compositeWithTrainedAlgorithmicMedia). The structured kind is parsed once in
@@ -1296,7 +1291,8 @@ def _identify_from_evidence(
     generator = (
         info.get("claim_generator")
         or cbor_text_after(head, b"claim_generator")
-        or (", ".join(tools) if (tools := _ai_tools_in(region)) else None)
+        or (info.get("ai_tool") if reader_decoded else ", ".join(_ai_tools_in(region)))
+        or None
     )
     # Platform: a distinctive device/camera token in the manifest wins (it is the
     # signer/producer), then an exact product generator, then an editing-app or
@@ -1386,7 +1382,7 @@ def _identify_from_evidence(
     # through `identify` and not through the record, because `get_ai_metadata`'s own
     # fallback has no counterpart on the record side. `get_ai_metadata` keeps its copy
     # for its own callers; the verdict no longer depends on which extractor ran.
-    synthid = meta.get("synthid_watermark")
+    synthid = meta.get("synthid_watermark") or info.get("synthid_watermark")
     # The literal byte checks mirror `metadata.synthid_source` exactly rather than
     # reusing the derived `has_c2pa` / `source_kind` above, which are broader:
     # the file path's answer must not move.

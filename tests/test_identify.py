@@ -2211,9 +2211,9 @@ class TestRegistryTokenMatching:
         assert "Adobe" in registry_word_matches("Adobe_Firefly", C2PA_ISSUERS)
         assert "Firefly" in registry_word_matches("Adobe_Firefly", C2PA_AI_TOOLS)
 
-    def test_decoded_manifest_with_unknown_signer_is_not_rescanned_as_bytes(self, tmp_path: Path):
-        # Before the Amazon row, a decoded Bedrock manifest with an unregistered signer
-        # fell back to a raw byte scan, which found "Canva" in the "Nova Canvas" agent.
+    @staticmethod
+    def _unknown_signer_report(tmp_path: Path, raw_extra: bytes = b"", agent: str = "Example Renderer"):
+        """A reader-decoded AI manifest from an unregistered signer, with ``raw_extra`` in its bytes."""
         store = {
             "active_manifest": "m",
             "validation_results": {
@@ -2232,7 +2232,7 @@ class TestRegistryTokenMatching:
                                 "actions": [
                                     {
                                         "action": "c2pa.created",
-                                        "softwareAgent": "Nova Canvas",
+                                        "softwareAgent": agent,
                                         "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/"
                                         "trainedAlgorithmicMedia",
                                     }
@@ -2250,7 +2250,7 @@ class TestRegistryTokenMatching:
             path=tmp_path / "unknown-signer.png",
             c2pa_info=info,
             ai_metadata={},
-            scan=b"jumb c2pa " + json.dumps(store).encode(),
+            scan=b"jumb c2pa " + json.dumps(store).encode() + b" " + raw_extra,
             iptc_ai_system=None,
             aigc_label=None,
             exif_generator=None,
@@ -2258,7 +2258,44 @@ class TestRegistryTokenMatching:
             huggingface_job=None,
             samsung_genai=None,
         )
-        report = identify_from_evidence(evidence)
+        return identify_from_evidence(evidence)
+
+    def test_decoded_manifest_takes_no_signer_platform_from_raw_bytes(self, tmp_path: Path):
+        report = self._unknown_signer_report(tmp_path, b"ingredient signed by TikTok Inc.")
+        assert report.platform != "TikTok (C2PA signer)"
+
+    def test_decoded_manifest_takes_no_ai_tool_or_synthid_from_raw_bytes(self, tmp_path: Path):
+        report = self._unknown_signer_report(tmp_path, b"ingredient: Google LLC Imagen")
+        assert report.is_ai_generated is True
+        assert not any("SynthID" in mark for mark in report.watermarks)
+        assert not any("Imagen" in signal.detail for signal in report.signals)
+
+    def test_synthid_source_skips_raw_bytes_of_a_decoded_manifest(self, tmp_path: Path):
+        from remove_ai_watermarks.metadata import synthid_source
+
+        path = tmp_path / "decoded.jpg"
+        path.write_bytes(b"jumb c2pa trainedAlgorithmicMedia ingredient Google LLC")
+        assert synthid_source(path, c2pa_info={}) == "Google LLC"
+        assert synthid_source(path, c2pa_info={"c2pa_validation_source": "reader"}) is None
+
+    def test_claim_generator_tokens_are_whole_words(self):
+        from remove_ai_watermarks.identify import _claim_generator_platform
+
+        assert _claim_generator_platform("Sunoco Studio 2.1") is None
+        assert _claim_generator_platform("suno-v4 export") == "Suno"
+        assert _claim_generator_platform("Adobe_Firefly") == "Adobe Firefly"
+
+    def test_video_generator_tokens_are_whole_words(self):
+        from remove_ai_watermarks.video import _video_markers_claim_ai
+
+        base = {"c2pa_manifest": "C2PA manifest store", "issuer": "Example Studio"}
+        assert not _video_markers_claim_ai({**base, "claim_generator": "Soraya Editor 3"})
+        assert _video_markers_claim_ai({**base, "claim_generator": "Sora 2"})
+
+    def test_decoded_manifest_with_unknown_signer_is_not_rescanned_as_bytes(self, tmp_path: Path):
+        # Before the Amazon row, a decoded Bedrock manifest with an unregistered signer
+        # fell back to a raw byte scan, which found "Canva" in the "Nova Canvas" agent.
+        report = self._unknown_signer_report(tmp_path, agent="Nova Canvas")
 
         assert report.is_ai_generated is True
         assert report.platform != "Canva (Magic Media)"

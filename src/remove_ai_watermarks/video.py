@@ -371,11 +371,8 @@ def _video_markers_claim_ai(markers: dict[str, str]) -> bool:
     so only through an AI-generator identity: a registered AI signer or an AI
     product named as the claim generator.
     """
-    from remove_ai_watermarks._internal.constants import (
-        C2PA_AI_TOOLS,
-        C2PA_CLAIM_GENERATOR_PLATFORMS,
-        C2PA_IDENTITY_AI_ORGS,
-    )
+    from remove_ai_watermarks._internal.c2pa import claim_generator_word_platform, registry_word_matches
+    from remove_ai_watermarks._internal.constants import C2PA_AI_TOOLS, C2PA_IDENTITY_AI_ORGS
 
     source_type = markers.get("source_type", "")
     if any(key not in _C2PA_STRUCTURAL_MARKERS and key != "source_type" for key in markers):
@@ -386,8 +383,8 @@ def _video_markers_claim_ai(markers: dict[str, str]) -> bool:
     generator = markers.get("claim_generator", "")
     return (
         any(org in issuer for org in C2PA_IDENTITY_AI_ORGS)
-        or any(token in generator.casefold() for token, _ in C2PA_CLAIM_GENERATOR_PLATFORMS)
-        or any(token.decode() in generator for token in C2PA_AI_TOOLS)
+        or claim_generator_word_platform(generator) is not None
+        or bool(registry_word_matches(generator, C2PA_AI_TOOLS))
     )
 
 

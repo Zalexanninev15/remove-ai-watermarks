@@ -676,10 +676,15 @@ metadata extraction from verdict logic:
   of it framing: a CBOR text header before the token (`iMicrosoft`, 0x69 = length
   9) or a DER tag after it (`OpenAI1`, `Sora0`). The only continuation that named
   the wrong vendor was `Canva|s`; `Adobe|Product` sat in an Adobe manifest. So raw
-  bytes decide nothing once the reader has decoded the manifest: an unregistered
-  signer stays unknown rather than being re-derived from bytes, which is how the
-  Amazon Bedrock image read as Canva. The byte scan remains only for manifests
-  the reader cannot open (1 of the 1,379).
+  bytes decide nothing once the reader has decoded the manifest: not the signer
+  (an unregistered one stays unknown, where the byte scan had read the Amazon
+  Bedrock image as Canva), not a signer-platform token, not the AI-tool fallback
+  for the generator, and not the SynthID vendor inference, in `identify` and in
+  `metadata.synthid_source` alike; the verdict reads SynthID from the decoded
+  C2PA info when the metadata dict lacks it. Claim-generator tokens also match as whole
+  words (`suno` no longer matches `Sunoco`). The byte scans remain only for
+  manifests the reader cannot open (1 of the 1,379), and verdicts over all 1,379
+  were unchanged by the rule.
 - `identify_from_evidence` evaluates that evidence without reopening the source. Rules
   that decide a verdict live here, not in extraction: extraction has two
   implementations, and a rule in only one of them is a rule the other lacks. The

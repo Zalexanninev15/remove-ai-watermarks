@@ -871,6 +871,10 @@ def synthid_source(image_path: Path, *, c2pa_info: dict[str, Any] | None = None)
     vendors = c2pa.get("synthid_vendors")
     if vendors:
         return ", ".join(vendors)
+    # A manifest the reader decoded has already been judged on its identity strings;
+    # a raw byte scan would re-read vendor names from ingredients and agents.
+    if c2pa.get("c2pa_validation_source") == "reader":
+        return None
     soft_binding_algorithm = c2pa.get("soft_binding_algorithm")
     if soft_binding_algorithm:
         entries = soft_binding_registry_entries_in(str(soft_binding_algorithm).encode())
