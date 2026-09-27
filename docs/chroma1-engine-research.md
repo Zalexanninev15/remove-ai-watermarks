@@ -678,12 +678,15 @@ or quota limit" and later "the usage quota for checks on similar images has
 been exceeded", so the rest went to three others, each result recorded
 against its own slot): one carrier `(0.05, 0.10]`, one clean at 0.10 with
 0.05 unchecked, one `(0.10, 0.20]` ("Part of this image was edited or
-generated with Google AI" at 0.10), and one `detected` at 0.10 and
-"inconclusive" at 0.20, so its floor is above 0.20 or unsettled. At 0.20
-klein matched `qwen-zimage` at 0.35 on PSNR (17.0-20.3 against 17.6-21.0 dB)
-and beat it on LPIPS (0.079-0.152 against 0.111-0.191), and it kept the
-objects `qwen-zimage` redraws (the meatball bowl, the sign lettering). That is
-the one place klein could win, but no Google operating point exists until the
-fourth carrier settles above 0.20 and a margin is added. Outputs, reports and
+generated with Google AI" at 0.10), and one `detected` at 0.10,
+"inconclusive" at 0.20 and clean at 0.25. At 0.20 klein matched
+`qwen-zimage` at 0.35 on PSNR (17.0-20.3 against 17.6-21.0 dB), beat it on
+LPIPS (0.079-0.152 against 0.111-0.191), and kept the objects `qwen-zimage`
+redraws (the meatball bowl, the sign lettering). The operating point is what
+decides, though: the worst clean boundary 0.25 plus one full observed spread
+(0.25 - 0.10) is 0.40, and at 0.40 the limiting carrier reaches LPIPS 0.270
+and 14.6 dB against `qwen-zimage`'s 0.183 and 18.9 dB. Even with no margin, at
+0.25 it is level (0.185, 16.9 dB). klein is not a replacement global stage
+for either vendor. Outputs, reports and
 oracle records: `.local-eval/flux2-klein-2026-09-27/`.
 

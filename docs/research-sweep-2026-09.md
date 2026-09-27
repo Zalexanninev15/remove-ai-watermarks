@@ -61,9 +61,8 @@ This page is an index. Each finding lives in its canonical page.
   ([removal research](synthid-removal-research.md#color-restoration-after-regeneration-2026-09-27)).
   FLUX.2 klein 4B was measured the same day: stock inpainting copies the
   source through its reference tokens and keeps OpenAI SynthID, and without
-  them it clears OpenAI only at lower fidelity than `qwen-zimage`. On Google it
-  keeps objects `qwen-zimage` redraws, but one of four carriers is not yet
-  clean at 0.20
+  them it clears both vendors only at lower fidelity than `qwen-zimage` once
+  its Google operating point carries the usual cross-source margin
   ([Chroma1 research](chroma1-engine-research.md#flux2-klein-as-a-global-stage-2026-09-27)).
   Still open:
   Z-Image-Turbo as global stages (with an Apple Silicon arm through mflux),

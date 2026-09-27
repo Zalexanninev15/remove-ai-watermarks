@@ -137,6 +137,14 @@ hash-verified.
 Google did not expose a reset timestamp: the returned quota text supports only
 waiting and retrying, not a universal 24-hour claim.
 
+On 2026-09-27 one account refused after its tenth image check of the day, first
+as `a tool error or quota limit` and later as `the usage quota for checks on
+similar images has been exceeded`. Three other signed-in accounts in the same
+Chrome profile still answered at the same time, so the allowance is per
+account; the "similar images" wording is Google's and was not tested further.
+The refused row went to another account only on the operator's explicit
+instruction, recorded under that account's own slot.
+
 The documented Vertex AI Media Studio verification flow was also unavailable
 in the live console on 2026-09-14. Its old console URL redirected to Agent Media
 Studio after the Vertex-to-Agent Platform rename. The current Image playground
