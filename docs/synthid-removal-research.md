@@ -269,7 +269,10 @@ output `a,b`) and `AB` (output `L`, source `a,b`).
   `AB` outputs gave one settled "no SynthID", two "couldn't confirm" answers
   (one naming an inconclusive tool result, "edits that are too subtle or
   small to detect") and one empty `[source: 2]` answer. Recorded as one
-  `not_detected` and three `indeterminate`; no row was retried.
+  `not_detected` and three `indeterminate`; no row was retried. Only the
+  "inconclusive" answer is an explicit tool verdict. Forty minutes later the
+  same Gemini account answered "a tool error or quota limit", so the empty
+  and bare "couldn't confirm" answers may be tool failures rather than signal.
 - At 0.35 the regeneration redraws objects, and transplanted source chroma
   paints the old objects' colors onto the new ones as visible ghosts.
 

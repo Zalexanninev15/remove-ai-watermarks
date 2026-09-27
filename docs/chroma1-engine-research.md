@@ -12,9 +12,9 @@
 
 Correction 2026-09-23: the claim below is out of date. diffusers now ships
 `Flux2KleinInpaintPipeline`, whose `strength` argument drives `get_timesteps`
-and `scheduler.scale_noise` (checked against the installed 0.40.0 source); with an all-white mask it is partial-noise img2img, and FLUX.2 klein 4B
-is Apache-2.0. A measured FLUX.2 klein global stage is a pending experiment, not
-a shipped profile.
+and `scheduler.scale_noise` (checked against the installed 0.40.0 source), and FLUX.2 klein 4B
+is Apache-2.0. An all-white mask does not make it plain img2img, though: see
+[FLUX.2 klein as a global stage](#flux2-klein-as-a-global-stage-2026-09-27).
 
 Cited experiment behind issue #88 ("Please integrate Flux 2"): FLUX.2 has no
 native strength img2img anywhere (BFL reference code or diffusers; its image
@@ -644,3 +644,39 @@ rule here and then survive unused generation indices without changing it.
   `@synthid` hung once after attach, then returned a tool CLEAN on a
   second human-drag chat. Do not drive the live Chrome while it is in
   active use (wrong-tab risk).
+
+## FLUX.2 klein as a global stage (2026-09-27)
+
+`black-forest-labs/FLUX.2-klein-4B` (Apache-2.0, step-distilled) through
+diffusers 0.40.0 `Flux2KleinInpaintPipeline`, all-white mask, the neutral
+scrub prompt, guidance 1.0, seed 0, and the Chroma step compensation
+(`ceil(4 / strength)` requested, four or five effective steps). Global stage
+only, no face repair. Seven tracked originals from
+`data/synthid/full-pipeline-quality.csv`; compared with `qwen-zimage` at its
+vendor floors (OpenAI 0.15625, Google 0.35) on the same files. Harness:
+`flux2_klein_ladder.py`, kept outside this repository.
+
+The inpaint pipeline always appends the clean source latents as in-context
+reference tokens (`ref_images = [image_latents_encoded]`), whatever the mask
+and strength. With them the model copies the source: PSNR 30-37 dB and LPIPS
+0.003-0.02 at every strength up to 0.50, although the start sigma is already
+about 0.71 at strength 0.30 on a 1448x1086 image (the resolution-dependent
+shift, `mu` 1.48; 0.94 at 2816x1536). The official OpenAI API returned
+`detected` on all three OpenAI carriers at 0.30. Stock klein inpainting is
+therefore not a remover.
+
+Dropping the reference tokens leaves plain partial-noise img2img. OpenAI
+brackets from the official API: one carrier `(0.05, 0.10]`, two
+`(0.10, 0.20]`. At 0.20 klein reached PSNR 20.6 dB and LPIPS 0.054-0.058 on
+the two limiting carriers, against `qwen-zimage` at 22.4-24.0 dB and
+0.037-0.043 at its floor, before klein gets any cross-source margin. For
+OpenAI klein is the worse engine. It is fast, under one second per image on a
+warm H100.
+
+Google is unmeasured. At 0.10 klein kept far more of the Google carriers
+(LPIPS 0.04-0.07 against `qwen-zimage` 0.11-0.19 at 0.35, which also redraws
+objects), but the Gemini Verify AI tool returned an empty answer on the
+first upload and "a tool error or quota limit" on the second, so no Google
+verdict exists yet. Outputs, reports and oracle records:
+`.local-eval/flux2-klein-2026-09-27/`.
+
