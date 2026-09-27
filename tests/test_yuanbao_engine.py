@@ -72,10 +72,19 @@ class TestDetectAndMask:
         assert not YuanbaoEngine().detect(image).detected
 
     def test_match_must_hug_bottom_right_anchor(self):
+        # Shift the mark 60 px in from the corner: still inside the locate window, so
+        # the sweep finds it, but beyond the 0.04 anchor margin, so only the anchor
+        # gate can demote it. A far shift would fall outside the window and pass
+        # with or without the gate.
+        class Ungated(YuanbaoEngine):
+            def _post_gate(self, det, scan):
+                return det
+
         watermark, (ax, ay, gw, gh) = _compose(1024, 1024, bg=60, foreground=230)
         assert YuanbaoEngine().detect(watermark).detected
         shifted = np.full_like(watermark, 60)
-        shifted[600 : 600 + gh, 600 : 600 + gw] = watermark[ay : ay + gh, ax : ax + gw]
+        shifted[ay - 60 : ay - 60 + gh, ax - 60 : ax - 60 + gw] = watermark[ay : ay + gh, ax : ax + gw]
+        assert Ungated().detect(shifted).detected
         assert not YuanbaoEngine().detect(shifted).detected
 
     def test_mask_uses_detector_box_for_dark_mark(self):

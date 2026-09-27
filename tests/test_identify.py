@@ -46,6 +46,27 @@ _SPARKLE_TARGET = "remove_ai_watermarks.gemini_engine.detect_sparkle_confidence"
 SAMPLES_DIR = Path(__file__).resolve().parent.parent / "data" / "fixtures" / "provenance"
 
 
+def _jpeg_segment(marker: int, payload: bytes) -> bytes:
+    """One JPEG marker segment with its big-endian length."""
+    return bytes([0xFF, marker]) + (len(payload) + 2).to_bytes(2, "big") + payload
+
+
+def _evidence(path: Path, info: dict, scan: bytes) -> ProvenanceEvidence:
+    """Evidence carrying only C2PA info and the scan buffer."""
+    return ProvenanceEvidence(
+        path=path,
+        c2pa_info=info,
+        ai_metadata={},
+        scan=scan,
+        iptc_ai_system=None,
+        aigc_label=None,
+        exif_generator=None,
+        xai_signature=False,
+        huggingface_job=None,
+        samsung_genai=None,
+    )
+
+
 def _write_c2pa_jpeg(tmp_path: Path, name: str, blob: bytes) -> Path:
     path = tmp_path / name
     path.write_bytes(b"\xff\xd8\xff\xe1jumbc2pa" + blob + b"\xff\xd9")
@@ -898,12 +919,9 @@ class TestIdentifyRealSamples:
         # scan reads the manifest store (APP11), not the whole metadata region.
         from remove_ai_watermarks.identify import _c2pa_store_bytes, _issuers_in, _metadata_region
 
-        def segment(marker: int, payload: bytes) -> bytes:
-            return bytes([0xFF, marker]) + (len(payload) + 2).to_bytes(2, "big") + payload
-
         xmp = b"http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta x:xmptk='Adobe XMP Core 5.1.2'/>"
         store = b"JP\x00\x01jumbjumdc2pa vivo C2PA Device CA1 c2pa.claim.v2"
-        jpeg = b"\xff\xd8" + segment(0xE1, xmp) + segment(0xEB, store) + b"\xff\xda\x00\x02" + b"\x00" * 16
+        jpeg = b"\xff\xd8" + _jpeg_segment(0xE1, xmp) + _jpeg_segment(0xEB, store) + b"\xff\xda\x00\x02" + b"\x00" * 16
 
         region = _metadata_region(jpeg)
         assert "Adobe" in _issuers_in(region)
@@ -2246,19 +2264,8 @@ class TestRegistryTokenMatching:
         info = c2pa_info_from_manifest_store(store)
         assert info["c2pa_validation_source"] == "reader"
         assert not info.get("issuer")
-        evidence = ProvenanceEvidence(
-            path=tmp_path / "unknown-signer.png",
-            c2pa_info=info,
-            ai_metadata={},
-            scan=b"jumb c2pa " + json.dumps(store).encode() + b" " + raw_extra,
-            iptc_ai_system=None,
-            aigc_label=None,
-            exif_generator=None,
-            xai_signature=False,
-            huggingface_job=None,
-            samsung_genai=None,
-        )
-        return identify_from_evidence(evidence)
+        scan = b"jumb c2pa " + json.dumps(store).encode() + b" " + raw_extra
+        return identify_from_evidence(_evidence(tmp_path / "unknown-signer.png", info, scan))
 
     def test_decoded_manifest_takes_no_signer_platform_from_raw_bytes(self, tmp_path: Path):
         report = self._unknown_signer_report(tmp_path, b"ingredient signed by TikTok Inc.")
@@ -2277,6 +2284,44 @@ class TestRegistryTokenMatching:
         path.write_bytes(b"jumb c2pa trainedAlgorithmicMedia ingredient Google LLC")
         assert synthid_source(path, c2pa_info={}) == "Google LLC"
         assert synthid_source(path, c2pa_info={"c2pa_validation_source": "reader"}) is None
+
+    def test_decoded_manifest_takes_no_generator_or_soft_binding_from_raw_bytes(self, tmp_path: Path):
+        # An ingredient's claim_generator and soft-binding identifiers sit in the raw
+        # bytes; the decoded active manifest names neither.
+        report = self._unknown_signer_report(tmp_path, b"claim_generator\x67firefly com.digimarc.validate.1")
+        assert report.platform != "Adobe Firefly"
+        assert not any("Digimarc" in mark for mark in report.watermarks)
+
+    def test_device_token_outside_the_manifest_store_is_no_camera(self, tmp_path: Path):
+        # "NIKON" as an EXIF Make beside an unrelated AI manifest is not a verified
+        # Nikon capture: device tokens are read from the manifest store only.
+        store = {
+            "active_manifest": "m",
+            "manifests": {
+                "m": {
+                    "signature_info": {"issuer": "Example Studio, Inc."},
+                    "assertions": [
+                        {
+                            "label": "c2pa.actions.v2",
+                            "data": {
+                                "actions": [{"action": "c2pa.created", "digitalSourceType": "trainedAlgorithmicMedia"}]
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        jpeg = (
+            b"\xff\xd8"
+            + _jpeg_segment(0xE1, b"Exif\x00\x00 Make NIKON CORPORATION")
+            + _jpeg_segment(0xEB, b"JP\x00\x01jumbjumdc2pa " + json.dumps(store).encode())
+            + b"\xff\xda\x00\x02"
+            + b"\x00" * 16
+        )
+        info = c2pa_info_from_manifest_store(store)
+        report = identify_from_evidence(_evidence(tmp_path / "nikon-exif.jpg", info, jpeg))
+        assert report.is_ai_generated is True
+        assert report.platform != "Nikon (camera, C2PA capture)"
 
     def test_claim_generator_tokens_are_whole_words(self):
         from remove_ai_watermarks.identify import _claim_generator_platform

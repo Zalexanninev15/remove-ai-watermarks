@@ -1230,6 +1230,35 @@ class TestC2pa24Assertions:
         assert "ai_source_kind" not in c2pa_info_from_manifest_store(self._store([]))
 
 
+@pytest.mark.parametrize(
+    "levels",
+    [["human_validated"], ["fully_autonomous"], ["prompt_guided"], ["human_validated", "prompt_guided"]],
+)
+def test_byte_fallback_disclosure_kind_matches_the_structured_rule(levels: list[str]):
+    # Both paths must read the humanOversightLevel set by one rule: a human_validated
+    # disclosure beside a prompt_guided one is a generation, not an enhancement.
+    from remove_ai_watermarks._internal.c2pa import _populate_registry_fields
+
+    store = {
+        "active_manifest": "active",
+        "manifests": {
+            "active": {
+                "assertions": [
+                    {
+                        "label": "c2pa.ai-disclosure",
+                        "data": {"modelType": "diffusion", "contentProfile": {"humanOversightLevel": level}},
+                    }
+                    for level in levels
+                ]
+            }
+        },
+    }
+    structured = c2pa_info_from_manifest_store(store)["ai_source_kind"]
+    info: dict = {}
+    _populate_registry_fields(b"jumb c2pa c2pa.ai-disclosure " + " ".join(levels).encode(), info)
+    assert info["ai_source_kind"] == structured
+
+
 def test_byte_fallback_reads_ai_disclosure_label():
     from remove_ai_watermarks._internal.c2pa import _populate_registry_fields
 

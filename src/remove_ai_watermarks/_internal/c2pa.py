@@ -434,6 +434,14 @@ def _claim_generator_from_store(store: dict[str, Any]) -> str | None:
 # compositeWithTrainedAlgorithmicMedia, fully_autonomous and prompt_guided with
 # trainedAlgorithmicMedia. It only decides the kind when no digitalSourceType did.
 _AI_DISCLOSURE_ENHANCED_LEVELS = frozenset({"human_validated"})
+_AI_DISCLOSURE_LEVELS = (*_AI_DISCLOSURE_ENHANCED_LEVELS, "fully_autonomous", "prompt_guided")
+
+
+def _disclosure_kind(oversight: list[str]) -> str:
+    """The source kind a set of humanOversightLevel values implies (spec 18.28.3)."""
+    if oversight and all(level in _AI_DISCLOSURE_ENHANCED_LEVELS for level in oversight):
+        return "enhanced"
+    return "generated"
 
 
 def _apply_ai_disclosures(disclosures: list[dict[object, object]], info: dict[str, Any]) -> str | None:
@@ -456,9 +464,7 @@ def _apply_ai_disclosures(disclosures: list[dict[object, object]], info: dict[st
     info["ai_disclosure"] = ", ".join(dict.fromkeys(models)) or "present"
     if oversight:
         info["human_oversight"] = ", ".join(dict.fromkeys(oversight))
-    if oversight and all(level in _AI_DISCLOSURE_ENHANCED_LEVELS for level in oversight):
-        return "enhanced"
-    return "generated"
+    return _disclosure_kind(oversight)
 
 
 def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
@@ -762,7 +768,7 @@ def _populate_registry_fields(buffer: bytes, info: dict[str, Any]) -> bool:
         info.update(source_type="compositeWithTrainedAlgorithmicMedia (AI-enhanced)", ai_source_kind="enhanced")
         ai_source = True
     elif b"c2pa.ai-disclosure" in buffer:
-        kind = "enhanced" if b"human_validated" in buffer and b"fully_autonomous" not in buffer else "generated"
+        kind = _disclosure_kind([level for level in _AI_DISCLOSURE_LEVELS if level.encode() in buffer])
         info.update(source_type=f"c2pa.ai-disclosure ({kind})", ai_source_kind=kind, ai_disclosure="present")
         ai_source = True
     elif b"algorithmicMedia" in buffer:

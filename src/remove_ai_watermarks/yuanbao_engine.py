@@ -22,18 +22,13 @@ covered by this silhouette.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from remove_ai_watermarks import _text_mark_engine
 from remove_ai_watermarks._text_mark_engine import (
+    BottomRightAnchoredEngine,
     TextMarkConfig,
-    TextMarkDetection,
-    TextMarkEngine,
-    TextMarkScan,
 )
-
-logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -84,7 +79,7 @@ def _alpha_template() -> NDArray[Any] | None:
     return _text_mark_engine.load_alpha_template(_CONFIG.asset_name)
 
 
-class YuanbaoEngine(TextMarkEngine):
+class YuanbaoEngine(BottomRightAnchoredEngine):
     """Detect and localize the bottom-right Yuanbao mark."""
 
     _ANCHOR_MAX_RIGHT = 0.04
@@ -92,29 +87,3 @@ class YuanbaoEngine(TextMarkEngine):
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
-
-    def _post_gate(self, det: TextMarkDetection, scan: TextMarkScan) -> TextMarkDetection:
-        """Demote a match that does not hug the bottom-right corner.
-
-        A shared post-gate rather than a ``detect`` override, so the single-pass
-        perception path (``detect_both``) cannot skip it.
-        """
-        if not det.detected or scan.loc is None:
-            return det
-        box = det.match_box  # the sweep the scan already ran on this same loc
-        if box is None:
-            det.detected = False
-            return det
-        h, w = scan.frame
-        base = min(h, w)
-        right = (w - (scan.loc.x + box[2] + 1)) / base
-        bottom = (h - (scan.loc.y + box[3] + 1)) / base
-        if not (0 <= right <= self._ANCHOR_MAX_RIGHT and 0 <= bottom <= self._ANCHOR_MAX_BOTTOM):
-            logger.debug(
-                "Yuanbao detect: score %.3f but match off-anchor (right=%.3f bottom=%.3f); demoting.",
-                det.confidence,
-                right,
-                bottom,
-            )
-            det.detected = False
-        return det

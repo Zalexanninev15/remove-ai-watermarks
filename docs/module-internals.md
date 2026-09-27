@@ -679,12 +679,19 @@ metadata extraction from verdict logic:
   bytes decide nothing once the reader has decoded the manifest: not the signer
   (an unregistered one stays unknown, where the byte scan had read the Amazon
   Bedrock image as Canva), not a signer-platform token, not the AI-tool fallback
-  for the generator, and not the SynthID vendor inference, in `identify` and in
+  for the generator, not a raw `claim_generator` CBOR value, not a soft-binding
+  identifier, and not the SynthID vendor inference, in `identify` and in
   `metadata.synthid_source` alike; the verdict reads SynthID from the decoded
   C2PA info when the metadata dict lacks it. Claim-generator tokens also match as whole
   words (`suno` no longer matches `Sunoco`). The byte scans remain only for
   manifests the reader cannot open (1 of the 1,379), and verdicts over all 1,379
-  were unchanged by the rule.
+  were unchanged by the rule. Device tokens (`NIKON`, `Pixel Camera`, `sony.sig`)
+  exist only in raw bytes, so they stay a byte scan, but of the manifest store:
+  the same word as an EXIF Make beside an unrelated AI manifest is not a verified
+  capture. The source-kind scan is left on the whole buffer on purpose, because it
+  also reads IPTC `digitalSourceType` in XMP, a signal outside C2PA. The byte
+  fallback's `c2pa.ai-disclosure` kind now uses the structured path's rule
+  (`_disclosure_kind`): `human_validated` beside `prompt_guided` is a generation.
 - `identify_from_evidence` evaluates that evidence without reopening the source. Rules
   that decide a verdict live here, not in extraction: extraction has two
   implementations, and a rule in only one of them is a rule the other lacks. The

@@ -22,16 +22,10 @@ a real Wan cohort before any precision claim.
 
 from __future__ import annotations
 
-import logging
-
 from remove_ai_watermarks._text_mark_engine import (
+    BottomRightAnchoredEngine,
     TextMarkConfig,
-    TextMarkDetection,
-    TextMarkEngine,
-    TextMarkScan,
 )
-
-logger = logging.getLogger(__name__)
 
 # Locate box as a fraction of the SHORT side: the mark plus slack for the ladder.
 WM_WIDTH_FRAC = 0.17
@@ -74,7 +68,7 @@ _CONFIG = TextMarkConfig(
 )
 
 
-class WanEngine(TextMarkEngine):
+class WanEngine(BottomRightAnchoredEngine):
     """Detect/localize the bottom-right Wan logo plus wordmark (locate -> mask -> fill)."""
 
     # Match must end this close to the right and bottom edges (fraction of the short
@@ -84,29 +78,3 @@ class WanEngine(TextMarkEngine):
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
-
-    def _post_gate(self, det: TextMarkDetection, scan: TextMarkScan) -> TextMarkDetection:
-        """Demote a match that does not hug the bottom-right corner.
-
-        A shared post-gate rather than a ``detect`` override, so the single-pass
-        perception path (``detect_both``) cannot skip it.
-        """
-        if not det.detected or scan.loc is None:
-            return det
-        box = det.match_box
-        if box is None:
-            det.detected = False
-            return det
-        h, w = scan.frame
-        base = min(h, w)
-        right = (w - (scan.loc.x + box[2] + 1)) / base
-        bottom = (h - (scan.loc.y + box[3] + 1)) / base
-        if not (0 <= right <= self._ANCHOR_MAX_RIGHT and 0 <= bottom <= self._ANCHOR_MAX_BOTTOM):
-            logger.debug(
-                "Wan detect: score %.3f but match off-anchor (right=%.3f bottom=%.3f); demoting.",
-                det.confidence,
-                right,
-                bottom,
-            )
-            det.detected = False
-        return det

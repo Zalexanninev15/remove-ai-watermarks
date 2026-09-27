@@ -1249,7 +1249,11 @@ def _identify_from_evidence(
     # metadata rather than its pixels -- see `_metadata_region`. Every other check
     # below keeps the full buffer: their markers are long and distinctive.
     region = _metadata_region(head)
-    camera_label = _device_platform(region)
+    # Device tokens (``NIKON``, ``Pixel Camera``) are C2PA identity, so they are read
+    # from the manifest store: the same words in EXIF or XMP of an unrelated file must
+    # not claim a verified camera capture.
+    c2pa_store = _c2pa_store_bytes(head, region)
+    camera_label = _device_platform(c2pa_store)
 
     # ── C2PA Content Credentials ────────────────────────────────────
     has_c2pa = bool(info) or c2pa_marker_in(head)
@@ -1264,7 +1268,7 @@ def _identify_from_evidence(
     # the Canva token sits inside an Amazon Bedrock "Nova Canvas" agent. The byte scans
     # read the store only when the reader could not open the manifest.
     reader_decoded = info.get("c2pa_validation_source") == "reader"
-    store = b"" if reader_decoded else _c2pa_store_bytes(head, region)
+    store = b"" if reader_decoded else c2pa_store
     issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(store)
     signer_label = _signer_platform(store, issuers)
     # Full AI generation (trainedAlgorithmicMedia) vs an AI-enhanced real photo
@@ -1290,7 +1294,7 @@ def _identify_from_evidence(
     # identified by `_device_platform`.
     generator = (
         info.get("claim_generator")
-        or cbor_text_after(head, b"claim_generator")
+        or (None if reader_decoded else cbor_text_after(head, b"claim_generator"))
         or (info.get("ai_tool") if reader_decoded else ", ".join(_ai_tools_in(region)))
         or None
     )
@@ -1394,7 +1398,7 @@ def _identify_from_evidence(
     # read as "SynthID per OpenAI"). Fingerprints do not suppress independent
     # SynthID evidence; an unknown algorithm stays fail-safe as a possible mark.
     soft_binding_algorithm = meta.get("soft_binding_algorithm") or info.get("soft_binding_algorithm")
-    soft_binding_scan = region
+    soft_binding_scan = b"" if reader_decoded else region
     if soft_binding_algorithm:
         soft_binding_scan += b"\n" + str(soft_binding_algorithm).encode("utf-8", "replace")
     soft_binding_entries = soft_binding_registry_entries_in(soft_binding_scan)
