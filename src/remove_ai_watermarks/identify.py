@@ -1261,7 +1261,16 @@ def _identify_from_evidence(
     # by substring made the displayed reason a second, looser rule than the verdict.
     failed_c2pa_codes = [str(code) for code in cast("list[object]", info.get("c2pa_failed_codes", []))]
     store = _c2pa_store_bytes(head, region)
-    issuers = [info["issuer"]] if info.get("issuer") else _issuers_in(store)
+    # A manifest the reader decoded names its signer in ``info`` or not at all: an
+    # unregistered signer must not be re-derived from raw bytes, where the Canva token
+    # sits inside an Amazon Bedrock "Nova Canvas" agent. Bytes decide only when the
+    # reader could not open the manifest.
+    if info.get("issuer"):
+        issuers = [info["issuer"]]
+    elif info.get("c2pa_validation_source") == "reader":
+        issuers = []
+    else:
+        issuers = _issuers_in(store)
     signer_label = _signer_platform(store, issuers)
     # Full AI generation (trainedAlgorithmicMedia) vs an AI-enhanced real photo
     # (compositeWithTrainedAlgorithmicMedia). The structured kind is parsed once in

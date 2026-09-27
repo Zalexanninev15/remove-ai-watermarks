@@ -113,6 +113,9 @@ C2PA_AI_VENDORS: tuple[C2paAiVendor, ...] = (
     _vendor(b"Amazon Web Services", "Amazon", "Amazon Bedrock (Nova)", "Amazon"),
     _vendor(b"Canva", "Canva", "Canva (Magic Media)", "Canva"),
     _vendor(b"Eleven Labs", "ElevenLabs", "ElevenLabs", "ElevenLabs"),
+    # fal signs as "fal - Features & Labels Inc." (common name "fal.ai"); "fal-ai" is
+    # its claim-generator and software-agent prefix, which only the byte fallback reads.
+    _vendor(b"Features & Labels", "fal.ai", "fal.ai", "fal.ai", asserts_ai=True),
     _vendor(b"fal-ai", "fal.ai", "fal.ai", "fal.ai", asserts_ai=True),
     _vendor(b"Bria", "Bria Artificial Intelligence", "Bria AI", "Bria", asserts_ai=True),
     # Ideogram signs its downloads' Content Credentials with "Ideogram, Inc"; the

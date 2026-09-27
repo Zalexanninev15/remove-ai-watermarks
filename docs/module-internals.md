@@ -667,6 +667,19 @@ metadata extraction from verdict logic:
   further to the manifest store the container locates (`_c2pa_store_bytes`: JPEG
   APP11, PNG `caBX`): an XMP packet names Adobe in its toolkit string, and a vivo
   X300 capture was labeled "C2PA signer: Adobe" from it (2026-09-26).
+- Registry tokens are matched two ways, by what the text is. Decoded manifest
+  strings (signer, claim generator, software agent, and the video metadata
+  markers) use `registry_word_matches`: the token must stand as a whole word, so
+  `Canva` no longer matches `Nova Canvas`. Raw bytes cannot use that rule. Over
+  every C2PA file in the local corpus (1,379 files, 2026-09-26), 374 of 37,325
+  token matches in the manifest store had a letter or digit beside them, nearly all
+  of it framing: a CBOR text header before the token (`iMicrosoft`, 0x69 = length
+  9) or a DER tag after it (`OpenAI1`, `Sora0`). The only continuation that named
+  the wrong vendor was `Canva|s`; `Adobe|Product` sat in an Adobe manifest. So raw
+  bytes decide nothing once the reader has decoded the manifest: an unregistered
+  signer stays unknown rather than being re-derived from bytes, which is how the
+  Amazon Bedrock image read as Canva. The byte scan remains only for manifests
+  the reader cannot open (1 of the 1,379).
 - `identify_from_evidence` evaluates that evidence without reopening the source. Rules
   that decide a verdict live here, not in extraction: extraction has two
   implementations, and a rule in only one of them is a rule the other lacks. The

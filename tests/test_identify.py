@@ -2199,6 +2199,72 @@ class TestRegistryScansSkipTheCodedPixels:
         assert _metadata_region(blob) == blob
 
 
+class TestRegistryTokenMatching:
+    """Registry tokens match decoded manifest strings as whole words, never raw bytes a reader decoded."""
+
+    def test_word_matches_reject_a_token_inside_a_longer_word(self):
+        from remove_ai_watermarks._internal.c2pa import registry_word_matches
+        from remove_ai_watermarks._internal.constants import C2PA_AI_TOOLS, C2PA_ISSUERS
+
+        assert "Canva" not in registry_word_matches("Nova Canvas", C2PA_ISSUERS)
+        assert registry_word_matches("Canva", C2PA_ISSUERS) == ["Canva"]
+        assert "Adobe" in registry_word_matches("Adobe_Firefly", C2PA_ISSUERS)
+        assert "Firefly" in registry_word_matches("Adobe_Firefly", C2PA_AI_TOOLS)
+
+    def test_decoded_manifest_with_unknown_signer_is_not_rescanned_as_bytes(self, tmp_path: Path):
+        # Before the Amazon row, a decoded Bedrock manifest with an unregistered signer
+        # fell back to a raw byte scan, which found "Canva" in the "Nova Canvas" agent.
+        store = {
+            "active_manifest": "m",
+            "validation_results": {
+                "activeManifest": {
+                    "success": [{"code": "assertion.dataHash.match"}, {"code": "claimSignature.validated"}],
+                    "failure": [],
+                }
+            },
+            "manifests": {
+                "m": {
+                    "signature_info": {"issuer": "Example Studio, Inc.", "common_name": "Example Studio, Inc."},
+                    "assertions": [
+                        {
+                            "label": "c2pa.actions.v2",
+                            "data": {
+                                "actions": [
+                                    {
+                                        "action": "c2pa.created",
+                                        "softwareAgent": "Nova Canvas",
+                                        "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/"
+                                        "trainedAlgorithmicMedia",
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        info = c2pa_info_from_manifest_store(store)
+        assert info["c2pa_validation_source"] == "reader"
+        assert not info.get("issuer")
+        evidence = ProvenanceEvidence(
+            path=tmp_path / "unknown-signer.png",
+            c2pa_info=info,
+            ai_metadata={},
+            scan=b"jumb c2pa " + json.dumps(store).encode(),
+            iptc_ai_system=None,
+            aigc_label=None,
+            exif_generator=None,
+            xai_signature=False,
+            huggingface_job=None,
+            samsung_genai=None,
+        )
+        report = identify_from_evidence(evidence)
+
+        assert report.is_ai_generated is True
+        assert report.platform != "Canva (Magic Media)"
+        assert not any("Canva" in mark for mark in report.watermarks)
+
+
 class TestGooglePhotosSynthIdScope:
     """A Google Photos AI edit reports SynthID without a recorded SynthID action.
 

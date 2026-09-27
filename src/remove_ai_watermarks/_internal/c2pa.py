@@ -484,7 +484,7 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
 
     def add_tool_matches(value: str, *, asserts_ai: bool = False) -> None:
         nonlocal claim_generator_asserts_ai
-        matches = _ordered_matches(value.encode(), C2PA_AI_TOOLS)
+        matches = registry_word_matches(value, C2PA_AI_TOOLS)
         tools.extend(matches)
         if asserts_ai and matches:
             claim_generator_asserts_ai = True
@@ -496,7 +496,7 @@ def _structured_manifest_fields(store: dict[str, Any]) -> dict[str, Any]:
             for key in ("issuer", "common_name", "certificate_issuer"):
                 value = signature.get(key)
                 if isinstance(value, str):
-                    issuers.extend(_ordered_matches(value.encode(), C2PA_ISSUERS))
+                    issuers.extend(registry_word_matches(value, C2PA_ISSUERS))
                     identity_strings.append(value)
 
         ingredient_values = manifest.get("ingredients")
@@ -711,6 +711,26 @@ def soft_binding_labels(entries: Iterable[C2paSoftBindingAlgorithm], *, kind: st
 
 def _ordered_matches(buffer: bytes, registry: dict[bytes, str]) -> list[str]:
     return list(dict.fromkeys(label for token, label in registry.items() if token in buffer))
+
+
+def registry_word_matches(text: str, registry: dict[bytes, str]) -> list[str]:
+    """Registry labels whose token appears in ``text`` as a whole word.
+
+    For decoded manifest strings only. A raw substring match named Canva for the
+    "Nova Canvas" software agent of an Amazon Bedrock image; inside a decoded string
+    a letter or digit next to the token is always a longer word. Raw manifest bytes
+    cannot use this rule: CBOR length headers and DER tags sit next to real tokens
+    as letters and digits (``iMicrosoft``, ``OpenAI1``), measured over every C2PA
+    file in the local corpus on 2026-09-26.
+    """
+    return list(
+        dict.fromkeys(label for token, label in registry.items() if _word_pattern(token).search(text) is not None)
+    )
+
+
+@functools.cache
+def _word_pattern(token: bytes) -> re.Pattern[str]:
+    return re.compile(r"(?<![A-Za-z0-9])" + re.escape(token.decode("utf-8")) + r"(?![A-Za-z0-9])")
 
 
 def _populate_registry_fields(buffer: bytes, info: dict[str, Any]) -> bool:

@@ -393,14 +393,19 @@ def _video_markers_claim_ai(markers: dict[str, str]) -> bool:
 
 def _platform_from_video_metadata(markers: dict[str, str]) -> str | None:
     """Map supported C2PA-derived marker text to its generating platform."""
+    from remove_ai_watermarks._internal.c2pa import registry_word_matches
     from remove_ai_watermarks._internal.constants import C2PA_AI_VENDORS
 
     marker_text = "\n".join(markers.values()).casefold()
     if not marker_text:
         return None
-    for vendor in C2PA_AI_VENDORS:
-        if vendor.platform is not None and vendor.needle is not None and vendor.needle.casefold() in marker_text:
-            return vendor.platform
+    needles = {
+        vendor.needle.casefold().encode(): vendor.platform
+        for vendor in C2PA_AI_VENDORS
+        if vendor.platform is not None and vendor.needle is not None
+    }
+    if hits := registry_word_matches(marker_text, needles):
+        return hits[0]
     if "aigc_label" in markers:
         return _tc260_video_platform(markers.get("aigc_producer", "")) or (
             "China AIGC-labeled content (TC260 standard)"
