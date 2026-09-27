@@ -1051,7 +1051,7 @@ class TestIdentifyRealSamples:
         assert any("only the signing time is unproven" in caveat for caveat in report.caveats)
 
     def test_no_committed_fixture_reports_a_trusted_signer(self):
-        """The reachability guard for :func:`_c2pa_credential_level`.
+        """The reachability guard for :func:`c2pa_credential_level`.
 
         The SDK ships no production trust anchors, so ``signingCredential.trusted``
         appears in no default installation. Gating high confidence on it made that branch
@@ -2324,11 +2324,11 @@ class TestRegistryTokenMatching:
         assert report.platform != "Nikon (camera, C2PA capture)"
 
     def test_claim_generator_tokens_are_whole_words(self):
-        from remove_ai_watermarks.identify import _claim_generator_platform
+        from remove_ai_watermarks._internal.c2pa import claim_generator_platform
 
-        assert _claim_generator_platform("Sunoco Studio 2.1") is None
-        assert _claim_generator_platform("suno-v4 export") == "Suno"
-        assert _claim_generator_platform("Adobe_Firefly") == "Adobe Firefly"
+        assert claim_generator_platform("Sunoco Studio 2.1") is None
+        assert claim_generator_platform("suno-v4 export") == "Suno"
+        assert claim_generator_platform("Adobe_Firefly") == "Adobe Firefly"
 
     def test_video_generator_tokens_are_whole_words(self):
         from remove_ai_watermarks.video import _video_markers_claim_ai

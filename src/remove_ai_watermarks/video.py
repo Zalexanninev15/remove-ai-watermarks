@@ -274,39 +274,22 @@ def _visible_removal_plan(
     """Resolve one provider's stable frame regions and fill geometry.
 
     Everything provider-specific -- the confidence floors, the run length, the fill
-    padding and the mask style -- is data on ``VISIBLE_MARK_POLICIES``. The only thing
-    left here is WHICH metadata predicate confirms which vendor, which genuinely is a
-    mapping and not a tuning constant.
+    padding and the mask style -- is data on ``VISIBLE_MARK_POLICIES``; which metadata
+    confirms or contradicts which vendor lives beside the predicates in
+    ``video_visible``.
     """
     from remove_ai_watermarks.video_visible import (
         VISIBLE_MARK_POLICIES,
+        confirms_video_provenance,
         contradicts_video_provenance,
-        has_bytedance_video_provenance,
-        has_doubao_video_provenance,
-        has_hailuo_video_provenance,
-        has_sora_provenance,
-        has_veo_provenance,
-        has_vidu_video_provenance,
         stabilize_localizations,
     )
 
-    confirms = {
-        "sora": has_sora_provenance,
-        "veo": has_veo_provenance,
-        "seedance": has_bytedance_video_provenance,
-        "doubao": has_doubao_video_provenance,
-        "dola": has_bytedance_video_provenance,
-        "hailuo": has_hailuo_video_provenance,
-        "vidu": has_vidu_video_provenance,
-    }.get(selected_mark)
     policy = VISIBLE_MARK_POLICIES[selected_mark]
     if contradicts_video_provenance(selected_mark, markers):
         return [None] * len(selected_scan.detections), policy.padding_fraction, policy.mask_style
-    regions = stabilize_localizations(
-        selected_mark,
-        selected_scan.detections,
-        provenance=bool(confirms and confirms(markers)),
-    )
+    confirmed = confirms_video_provenance(selected_mark, markers)
+    regions = stabilize_localizations(selected_mark, selected_scan.detections, provenance=confirmed)
     return regions, policy.padding_fraction, policy.mask_style
 
 
@@ -324,22 +307,11 @@ def _select_stable_visible_mark(
     ]
     | None
 ):
-    """Select the first stable provider result in the public specificity order."""
+    """Select the first stable mark in specificity order that provenance does not veto."""
     for candidate_mark in candidate_marks:
-        candidate_scan = scans[candidate_mark]
-        candidate_regions, candidate_padding, candidate_mask_style = _visible_removal_plan(
-            candidate_mark,
-            candidate_scan,
-            markers,
-        )
-        if any(region is not None for region in candidate_regions):
-            return (
-                candidate_mark,
-                candidate_scan,
-                candidate_regions,
-                candidate_padding,
-                candidate_mask_style,
-            )
+        regions, padding, mask_style = _visible_removal_plan(candidate_mark, scans[candidate_mark], markers)
+        if any(region is not None for region in regions):
+            return candidate_mark, scans[candidate_mark], regions, padding, mask_style
     return None
 
 
@@ -371,7 +343,7 @@ def _video_markers_claim_ai(markers: dict[str, str]) -> bool:
     so only through an AI-generator identity: a registered AI signer or an AI
     product named as the claim generator.
     """
-    from remove_ai_watermarks._internal.c2pa import claim_generator_word_platform, registry_word_matches
+    from remove_ai_watermarks._internal.c2pa import claim_generator_platform, registry_word_matches
     from remove_ai_watermarks._internal.constants import C2PA_AI_TOOLS, C2PA_IDENTITY_AI_ORGS
 
     source_type = markers.get("source_type", "")
@@ -383,26 +355,22 @@ def _video_markers_claim_ai(markers: dict[str, str]) -> bool:
     generator = markers.get("claim_generator", "")
     return (
         any(org in issuer for org in C2PA_IDENTITY_AI_ORGS)
-        or claim_generator_word_platform(generator) is not None
+        or claim_generator_platform(generator) is not None
         or bool(registry_word_matches(generator, C2PA_AI_TOOLS))
     )
 
 
 def _platform_from_video_metadata(markers: dict[str, str]) -> str | None:
     """Map supported C2PA-derived marker text to its generating platform."""
-    from remove_ai_watermarks._internal.c2pa import registry_word_matches
-    from remove_ai_watermarks._internal.constants import C2PA_AI_VENDORS
+    from remove_ai_watermarks._internal.c2pa import c2pa_vendor_platform, claim_generator_platform
 
-    marker_text = "\n".join(markers.values()).casefold()
-    if not marker_text:
-        return None
-    needles = {
-        vendor.needle.casefold().encode(): vendor.platform
-        for vendor in C2PA_AI_VENDORS
-        if vendor.platform is not None and vendor.needle is not None
-    }
-    if hits := registry_word_matches(marker_text, needles):
-        return hits[0]
+    generator = markers.get("claim_generator", "")
+    if platform := (
+        claim_generator_platform(generator)
+        or c2pa_vendor_platform(generator)
+        or c2pa_vendor_platform("\n".join(markers.values()))
+    ):
+        return platform
     if "aigc_label" in markers:
         return _tc260_video_platform(markers.get("aigc_producer", "")) or (
             "China AIGC-labeled content (TC260 standard)"
@@ -555,8 +523,10 @@ def remove_video_visible(
     """Remove a supported visible AI wordmark from a video.
 
     ``mark="auto"`` scans every supported provider in one decode pass and selects
-    the first stable match in specificity order. Explicit marks are ``sora``,
-    ``veo``, ``seedance``, ``dola``, ``hailuo``, and ``kling``. The full
+    the first stable match in specificity order, except a Veo diamond nested in
+    a Sora cross-match or spanning the full clip against a partial Sora run,
+    with valid Google AI-video provenance. Explicit marks are
+    ``sora``, ``veo``, ``seedance``, ``doubao``, ``dola``, ``hailuo``, and ``kling``. The full
     sequence is scanned before pixels change, and only recurring candidates are
     accepted. Complete audio is copied without re-encoding; video is transcoded
     because the pixels change. ``temporal_consistency=True`` motion-aligns a

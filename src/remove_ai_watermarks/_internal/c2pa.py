@@ -338,6 +338,41 @@ def c2pa_info_has_invalid_credential(info: dict[str, Any]) -> bool:
     )
 
 
+def c2pa_credential_level(info: dict[str, Any]) -> str:
+    """Return invalid, verified, or unverified for provenance attribution.
+
+    ``verified`` means the reader tied this manifest to these bytes: the hard binding
+    matched and the claim signature validated. Signer trust is deliberately NOT a
+    condition -- no trust anchors ship, so gating on it made this branch unreachable.
+    Read the trust-anchor paragraph in docs/module-internals.md before changing this.
+    """
+    if c2pa_info_has_invalid_credential(info):
+        return "invalid"
+    if info.get("c2pa_integrity") == "valid" and info.get("c2pa_signature") == "valid":
+        return "verified"
+    return "unverified"
+
+
+def claim_generator_platform(generator: str | None) -> str | None:
+    """The product a claim-generator string names by a whole-word registry token, else None."""
+    if not generator:
+        return None
+    return _first_word_match(generator.casefold(), _CLAIM_GENERATOR_TOKENS)
+
+
+_CLAIM_GENERATOR_TOKENS = {token.encode(): platform for token, platform in C2PA_CLAIM_GENERATOR_PLATFORMS}
+_VENDOR_PLATFORM_NEEDLES = {
+    vendor.needle.casefold().encode(): vendor.platform
+    for vendor in C2PA_AI_VENDORS
+    if vendor.platform and vendor.needle
+}
+
+
+def c2pa_vendor_platform(text: str) -> str | None:
+    """Platform of the first C2PA AI vendor ``text`` names as a whole word, case-insensitively."""
+    return _first_word_match(text.casefold(), _VENDOR_PLATFORM_NEEDLES)
+
+
 def c2pa_info_has_invismark(info: dict[str, Any]) -> bool:
     """Return whether parsed C2PA info declares Microsoft InvisMark."""
     soft_bindings = info.get("soft_binding_vendors")
@@ -735,13 +770,9 @@ def registry_word_matches(text: str, registry: dict[bytes, str]) -> list[str]:
     )
 
 
-_CLAIM_GENERATOR_TOKENS = {token.encode(): platform for token, platform in C2PA_CLAIM_GENERATOR_PLATFORMS}
-
-
-def claim_generator_word_platform(generator: str) -> str | None:
-    """The product a claim-generator string names by a whole-word registry token, else None."""
-    matches = registry_word_matches(generator.casefold(), _CLAIM_GENERATOR_TOKENS)
-    return matches[0] if matches else None
+def _first_word_match(text: str, registry: dict[bytes, str]) -> str | None:
+    """The first registry label, in registry order, whose token is a whole word of ``text``."""
+    return next((label for token, label in registry.items() if _word_pattern(token).search(text) is not None), None)
 
 
 @functools.cache

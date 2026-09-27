@@ -14,7 +14,7 @@ Aggregates every locally-readable signal into a single :class:`ProvenanceReport`
 Hard limit: a stripped image (re-encoded, screenshotted, social-media upload)
 loses all metadata, and the SynthID *pixel* watermark is not locally decodable
 (proprietary decoder). Absence of signals is therefore reported as ``Unknown``,
-never as "clean". See CLAUDE.md "SynthID detection is metadata-only".
+never as "clean". See docs/synthid.md section 3, "Detectability and verifier access".
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
 from remove_ai_watermarks._internal.c2pa import (
+    c2pa_credential_level,
     c2pa_info_from_manifest_store,
-    c2pa_info_has_invalid_credential,
     c2pa_info_has_invismark,
     c2pa_info_has_removal_hint,
     cbor_text_after,
-    claim_generator_word_platform,
+    claim_generator_platform,
     extract_c2pa_info,
     soft_binding_labels,
     soft_binding_registry_entries_in,
@@ -585,21 +585,6 @@ def _c2pa_validation(info: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _c2pa_credential_level(info: dict[str, Any]) -> str:
-    """Return invalid, verified, or unverified for provenance attribution.
-
-    ``verified`` means the reader tied this manifest to these bytes: the hard binding
-    matched and the claim signature validated. Signer trust is deliberately NOT a
-    condition -- no trust anchors ship, so gating on it made this branch unreachable.
-    Read the trust-anchor paragraph in docs/module-internals.md before changing this.
-    """
-    if c2pa_info_has_invalid_credential(info):
-        return "invalid"
-    if info.get("c2pa_integrity") == "valid" and info.get("c2pa_signature") == "valid":
-        return "verified"
-    return "unverified"
-
-
 def extract_provenance_evidence(image_path: Path) -> ProvenanceEvidence:
     """Read all file-backed metadata needed by provenance verdict logic once."""
     return ProvenanceEvidence(
@@ -825,13 +810,6 @@ def _attribute_platform(issuers: list[str], *, is_ai: bool = True) -> str | None
     if issuers:  # e.g. Truepic alone -- a signing authority, not a generator
         return f"C2PA signer: {', '.join(issuers)} (no known AI generator named)"
     return None
-
-
-def _claim_generator_platform(generator: str | None) -> str | None:
-    """Resolve a distinctive C2PA claim generator to its user-facing product."""
-    if not generator:
-        return None
-    return claim_generator_word_platform(generator)
 
 
 # Coarse origin-vendor normalization for integrity-clash detection. Two signals
@@ -1258,7 +1236,7 @@ def _identify_from_evidence(
     # ── C2PA Content Credentials ────────────────────────────────────
     has_c2pa = bool(info) or c2pa_marker_in(head)
     c2pa_validation = _c2pa_validation(info)
-    c2pa_level = _c2pa_credential_level(info)
+    c2pa_level = c2pa_credential_level(info)
     c2pa_usable = c2pa_level != "invalid"
     # The reader already named which failures moved a dimension; re-deriving that here
     # by substring made the displayed reason a second, looser rule than the verdict.
@@ -1309,12 +1287,12 @@ def _identify_from_evidence(
             camera_label
             # Exact product generators are useful provenance even when the
             # signed operation is a non-AI edit (for example, CapCut).
-            or _claim_generator_platform(generator)
+            or claim_generator_platform(generator)
             # An AI product generator recorded under a generic re-signer beats the
             # signer's own label: Dreamina exports carry a "Dreamina/7.5.0"
             # ingredient under an active "ByteDance Media Transcode Service"
             # claim (measured 2026-09-24).
-            or (_claim_generator_platform(str(info.get("ai_tool"))) if c2pa_is_ai and info.get("ai_tool") else None)
+            or (claim_generator_platform(str(info.get("ai_tool"))) if c2pa_is_ai and info.get("ai_tool") else None)
             or signer_label
             or (
                 _GOOGLE_PHOTOS_EDIT
