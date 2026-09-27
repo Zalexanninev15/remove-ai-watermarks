@@ -55,8 +55,11 @@ This page is an index. Each finding lives in its canonical page.
   `SecurityData` JSON object, a digital signature over the label and optionally
   the content, in `ReservedCode1` and `ReservedCode2`. The library accepts those
   fields as label evidence but does not verify the signature.
-- **Experiments.** Chroma restoration after regeneration (from the NeurIPS 2024
-  "Erasing the Invisible" winning solution, arXiv:2508.21072), FLUX.2 klein and
+- **Experiments.** Chroma restoration after regeneration (arXiv:2508.21072) was
+  measured on 2026-09-27 and is not shipped: transplanted source chroma left
+  three of four Gemini checks inconclusive and ghosts redrawn objects
+  ([removal research](synthid-removal-research.md#color-restoration-after-regeneration-2026-09-27)).
+  Still open: FLUX.2 klein and
   Z-Image-Turbo as global stages (with an Apple Silicon arm through mflux),
   linear probes on newer frozen backbones for `classify`, Resemble Perth and
   Meta PixelSeal as benchmark oracles, re-watermarking as a removal primitive

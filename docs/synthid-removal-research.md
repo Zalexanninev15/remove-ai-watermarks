@@ -247,3 +247,38 @@ None of these is a result on a production closed watermark.
 Invisible removal in this package regenerates through `qwen-zimage` or
 `sdxl-zimage`. It is lossy. There is no shipped pixel-only OpenAI or
 Google SynthID wipe. Do not add Bayer or geometry as remover arms.
+
+### Color restoration after regeneration (2026-09-27)
+
+The NeurIPS 2024 "Erasing the Invisible" winner
+([arXiv:2508.21072](https://arxiv.org/abs/2508.21072)) restores color after
+its beige-box VAE attack in CIELAB: the output's `L` is moment-matched to the
+watermarked source and the source's `a,b` replace the output's. It was tested
+as post-processing on the shipped `qwen-zimage` profile at its vendor floors
+(OpenAI 0.15625, Google 0.35, seed 0) over the seven tracked originals in
+`data/synthid/full-pipeline-quality.csv`. Arms: `L` (moment-matched `L`,
+output `a,b`) and `AB` (output `L`, source `a,b`).
+
+- `L` changed nothing measurable: the regeneration does not shift global
+  lightness at these strengths.
+- `AB` lowered mean CIEDE2000 on all seven (OpenAI 3.1-3.6 to 1.9-2.2, Google
+  6.0-8.6 to 4.5-6.4) and LPIPS by 5-19%.
+- Official OpenAI API: all three base and all three `AB` outputs
+  `not_detected`.
+- Gemini: all four base outputs were settled "no SynthID" answers; the four
+  `AB` outputs gave one settled "no SynthID", two "couldn't confirm" answers
+  (one naming an inconclusive tool result, "edits that are too subtle or
+  small to detect") and one empty `[source: 2]` answer. Recorded as one
+  `not_detected` and three `indeterminate`; no row was retried.
+- At 0.35 the regeneration redraws objects, and transplanted source chroma
+  paints the old objects' colors onto the new ones as visible ghosts.
+
+Not shipped. Source chroma is not a safe channel for Google's mark. The
+Y/Cb/Cr scramble splits above placed OpenAI's mark in luma; for Google either
+the decoder reads more than luma or the Lab-to-RGB conversion carries source
+structure back into it, and these arms do not separate the two. A
+structure-gated transplant restricted to OpenAI is
+the only arm left open, and its gain would be color fidelity at a floor that
+already clears with margin. Hash-bound batch and verdicts:
+`.local-eval/color-restoration-2026-09-27/` (`run/report.json`,
+`variants.json`, `oracle/`, `gemini-batch/`).
