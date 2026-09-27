@@ -33,7 +33,7 @@ def test_every_stored_capture_is_indexed_once(manifest: Path):
     assert len(indexed) == len(set(indexed))
     assert len({row["sha256"] for row in rows}) == len(rows)
     on_disk = {
-        str(path.relative_to(ROOT))
+        path.relative_to(ROOT).as_posix()
         for path in manifest.parent.rglob("*")
         if path.is_file() and path.name not in {"manifest.csv", "README.md"}
     }
