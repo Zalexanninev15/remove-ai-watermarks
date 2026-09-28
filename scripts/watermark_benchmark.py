@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import logging
 import math
@@ -71,7 +72,9 @@ MEDIA_TYPES: tuple[Media, ...] = ("image", "audio", "video")
 ADAPTER_MEDIA: dict[str, Media] = {
     "dwt-dct": "image",
     "trustmark": "image",
+    "pixelseal": "image",
     "audioseal": "audio",
+    "perth": "audio",
     "videoseal": "video",
 }
 _FIELDS = {
@@ -131,6 +134,8 @@ class DetectorOutcome:
     label: str | None
     error: str | None = None
     temporal: tuple[float, ...] | None = None
+    message_bit_accuracy: float | None = None
+    score: float | None = None
 
 
 class DetectorAdapter(Protocol):
@@ -173,11 +178,66 @@ class VideoSealAdapter:
     def detect(self, path: Path, frames: NDArray[Any]) -> DetectorOutcome:
         from videoseal_oracle import read
 
-        reading = read(_videoseal_model(), frames)
+        reading = read(_oracle_model("videoseal_oracle"), frames)
         return DetectorOutcome(
             status="detected" if reading.detected else "not_detected",
             label=reading.label if reading.detected else None,
             temporal=reading.per_frame_bit_accuracy,
+            message_bit_accuracy=reading.bit_accuracy,
+        )
+
+
+@dataclass(frozen=True)
+class PerthAdapter:
+    """Adapter for Perth's implicit presence score."""
+
+    name: str
+    source_file: Path
+
+    @property
+    def available(self) -> bool:
+        """Probe the optional stack only when a Perth row is evaluated."""
+        from perth_oracle import available
+
+        return available()
+
+    def detect(self, path: Path, samples: NDArray[Any]) -> DetectorOutcome:
+        from perth_oracle import read
+
+        reading = read(_oracle_model("perth_oracle"), samples)
+        return DetectorOutcome(
+            status="detected" if reading.detected else "not_detected",
+            label="perth-v1" if reading.detected else None,
+            score=reading.confidence,
+        )
+
+
+@dataclass(frozen=True)
+class PixelSealAdapter:
+    """Adapter for PixelSeal's fixed-message image verifier."""
+
+    name: str
+    source_file: Path
+
+    @property
+    def available(self) -> bool:
+        """Probe the optional stack only when a PixelSeal row is evaluated."""
+        from pixelseal_oracle import available
+
+        return available()
+
+    def detect(self, path: Path, image: NDArray[Any]) -> DetectorOutcome:
+        import cv2
+        from pixelseal_oracle import read
+
+        from remove_ai_watermarks.image_io import to_bgr
+
+        rgb = cv2.cvtColor(to_bgr(image), cv2.COLOR_BGR2RGB)
+        reading = read(_oracle_model("pixelseal_oracle"), rgb)
+        return DetectorOutcome(
+            status="detected" if reading.detected else "not_detected",
+            label=reading.label if reading.detected else None,
+            message_bit_accuracy=reading.bit_accuracy,
         )
 
 
@@ -409,11 +469,15 @@ def default_adapters() -> dict[str, DetectorAdapter]:
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
     import audioseal_oracle
+    import perth_oracle
+    import pixelseal_oracle
     import videoseal_oracle
 
     dwt_source = Path(invisible_watermark.__file__).resolve()
     trustmark_source = Path(trustmark_detector.__file__).resolve()
     audio_oracle_source = Path(audioseal_oracle.__file__).resolve()
+    perth_oracle_source = Path(perth_oracle.__file__).resolve()
+    pixel_oracle_source = Path(pixelseal_oracle.__file__).resolve()
     video_oracle_source = Path(videoseal_oracle.__file__).resolve()
     return {
         "dwt-dct": FunctionAdapter(
@@ -428,11 +492,19 @@ def default_adapters() -> dict[str, DetectorAdapter]:
             available=trustmark_detector.is_available(),
             detector=_detect_trustmark,
         ),
+        "pixelseal": PixelSealAdapter(
+            name="pixelseal",
+            source_file=pixel_oracle_source,
+        ),
         "audioseal": FunctionAdapter(
             name="audioseal",
             source_file=audio_oracle_source,
             available=audioseal_oracle.available(),
             detector=_detect_audioseal,
+        ),
+        "perth": PerthAdapter(
+            name="perth",
+            source_file=perth_oracle_source,
         ),
         "videoseal": VideoSealAdapter(
             name="videoseal",
@@ -585,13 +657,13 @@ def _audioseal_detector() -> object:
 
 
 @cache
-def _videoseal_model() -> object:
+def _oracle_model(module_name: str) -> object:
+    """Load and cache one development-only oracle model."""
     scripts_dir = Path(__file__).resolve().parent
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
-    from videoseal_oracle import load_model
-
-    return load_model()
+    module = importlib.import_module(module_name)
+    return module.load_model()
 
 
 def _image_fidelity(
@@ -745,6 +817,10 @@ def _detection_record(
             "max_bit_accuracy": max(values) if values else None,
             "per_frame_bit_accuracy": [round(value, 6) for value in values],
         }
+    if outcome.message_bit_accuracy is not None:
+        record["message_bit_accuracy"] = float(outcome.message_bit_accuracy)
+    if outcome.score is not None:
+        record["score"] = float(outcome.score)
     if outcome.error is not None:
         record["error"] = outcome.error
     return record

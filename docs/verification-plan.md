@@ -449,10 +449,12 @@ audio-path attacks separately. Its carriers are synthetic non-speech audio
 and its oracle is AudioSeal, so it validates the copy semantics, not provider
 audio marks. The audio and video arms are now first-class benchmark rows:
 [benchmark kernel](benchmark-kernel.md) accepts `media_type: audio` and
-`media_type: video` with the revision-pinned `audioseal` and `videoseal`
-adapters, and both cohorts carry matched negatives, codec, and degradation
-arms as strict manifest cases. The temporal layer is closed too: videoseal
-detection records carry per-frame bit accuracy, and
+`media_type: video` with the revision-pinned `audioseal`, `perth`, and
+`videoseal` adapters, plus the `pixelseal` image adapter. The Perth and
+PixelSeal study records matched negatives, marked rows, attacks, fixed-message
+accuracy, and the copied-audio path as strict manifest cases. The temporal
+layer is closed too: videoseal detection records carry per-frame bit accuracy,
+and
 [VideoSeal temporal evaluation](videoseal-temporal-evaluation.md) measures
 the aggregation matrix and the crf decay curve on synthetic and real clips.
 What remains open here is a wider real-content sweep and the learned temporal

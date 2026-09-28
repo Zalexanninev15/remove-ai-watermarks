@@ -265,9 +265,12 @@ A local matched-oracle study has now measured the boundary concretely:
 into synthetic carriers, runs the visible video-cleaning path, and shows the
 audio packets byte-identical and the watermark verdict invariant across
 cleaning, while additive noise on the audio path is the effective lever. The
-boundary above still stands for provider marks: this tool still does not
-decode them, and a `copied_if_present` audio track remains `unverified` in
-runtime output.
+[Perth and PixelSeal benchmark study](benchmark-kernel.md#perth-and-pixelseal-local-oracle-study)
+independently repeats the pass-through check with Resemble Perth: all 24 visual
+frames are cleaned, the marked AAC packets remain byte-identical, and Perth's
+score stays 1.0. The boundary above still stands for provider marks: this tool
+still does not decode them, and a `copied_if_present` audio track remains
+`unverified` in runtime output.
 
 The shipped engine streams sampled frames in bounded batches, computes its
 fidelity metrics incrementally, and pipes regenerated pixels directly to

@@ -393,10 +393,12 @@ def test_jsonl_writer_refuses_overwrite_and_emits_strict_json(tmp_path: Path) ->
 def test_builtin_adapters_name_their_exact_source_files() -> None:
     adapters = MODULE.default_adapters()
 
-    assert set(adapters) == {"dwt-dct", "trustmark", "audioseal", "videoseal"}
+    assert set(adapters) == {"dwt-dct", "trustmark", "pixelseal", "audioseal", "perth", "videoseal"}
     assert adapters["dwt-dct"].source_file.name == "invisible_watermark.py"
     assert adapters["trustmark"].source_file.name == "trustmark_detector.py"
+    assert adapters["pixelseal"].source_file.name == "pixelseal_oracle.py"
     assert adapters["audioseal"].source_file.name == "audioseal_oracle.py"
+    assert adapters["perth"].source_file.name == "perth_oracle.py"
     assert adapters["videoseal"].source_file.name == "videoseal_oracle.py"
 
 
@@ -739,6 +741,20 @@ def test_detection_record_omits_temporal_for_non_temporal_adapters() -> None:
     outcome = MODULE.DetectorOutcome(status="not_detected", label=None)
 
     assert "temporal" not in MODULE._detection_record(outcome, "not_detected", None)
+
+
+def test_detection_record_carries_message_accuracy_and_presence_score() -> None:
+    outcome = MODULE.DetectorOutcome(
+        status="detected",
+        label="fixed-message",
+        message_bit_accuracy=0.996,
+        score=0.75,
+    )
+
+    record = MODULE._detection_record(outcome, "detected", 2.0)
+
+    assert record["message_bit_accuracy"] == 0.996
+    assert record["score"] == 0.75
 
 
 def test_run_benchmark_records_videoseal_temporal_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

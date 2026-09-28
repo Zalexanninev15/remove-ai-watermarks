@@ -70,10 +70,16 @@ This page is an index. Each finding lives in its canonical page.
   gray block on Veo, and ROSE retained the Veo wordmark on 17/17 frames. They
   are not shipped
   ([video inpainting research](video-inpainting-research.md)).
+  Resemble Perth and Meta PixelSeal were added as exact-revision, MIT-licensed
+  local benchmark oracles. The 2026-09-28 study found Perth on all three speech
+  positives and confirmed that visible-video cleaning copies its marked AAC
+  packets unchanged; PixelSeal survived JPEG q90 on both cleared image
+  carriers, while its CUDA-only removal profiles could not run on this host
+  ([benchmark study](benchmark-kernel.md#perth-and-pixelseal-local-oracle-study)).
   Still open:
   Z-Image-Turbo as a global stage (with an Apple Silicon arm through mflux),
-  linear probes on newer frozen backbones for `classify`, Resemble Perth and
-  Meta PixelSeal as benchmark oracles, re-watermarking as a removal primitive
+  linear probes on newer frozen backbones for `classify`, re-watermarking as a
+  removal primitive
   (arXiv:2605.16796, MIT code), RAVEN view-synthesis removal
   (arXiv:2601.08832, no code released as of 2026-09-24).
   MiniMax-Remover (CC-BY-NC-4.0 weights) and ProPainter (S-Lab License,

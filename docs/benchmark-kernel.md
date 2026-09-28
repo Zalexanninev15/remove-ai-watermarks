@@ -2,14 +2,14 @@
 
 `scripts/watermark_benchmark.py` is a development-only runner for reproducible
 image-, audio-, and video-watermark experiments. It calls the existing local
-DWT-DCT and TrustMark detectors plus the revision-pinned AudioSeal and
-VideoSeal oracles through thin adapters. It does not add a runtime command,
-download a corpus, or contact a provenance oracle or provider API. The
+DWT-DCT and TrustMark detectors plus the revision-pinned AudioSeal, Perth,
+PixelSeal, and VideoSeal oracles through thin adapters. It does not add a
+runtime command, download a corpus, or contact a provenance oracle or provider API. The
 optional TrustMark package can fetch its official Adobe model weights when its
 local package cache is incomplete, the audioseal adapter fetches its pinned
-checkpoints the same way, and the videoseal adapter downloads one pinned
-TorchScript file into a user cache; prepare those dependencies before an
-offline run.
+checkpoints the same way, and the PixelSeal and VideoSeal adapters download
+pinned weights into a user cache; prepare those dependencies before an offline
+run. Perth's checkpoint is bundled in its pinned source revision.
 
 The kernel answers three different questions and never merges their answers:
 
@@ -41,9 +41,9 @@ The fixed fields are:
 | `case_id` | Unique case identity. |
 | `pair_id` | Groups related clean, marked, attacked, and removed cases. |
 | `media_type` | `image`, `audio`, or `video` in schema v1. |
-| `adapter` | `dwt-dct` or `trustmark` for `image`; `audioseal` for `audio`; `videoseal` for `video`. The loader rejects a known adapter named against the wrong media type. |
+| `adapter` | `dwt-dct`, `trustmark`, or `pixelseal` for `image`; `audioseal` or `perth` for `audio`; `videoseal` for `video`. The loader rejects a known adapter named against the wrong media type. |
 | `arm` | `positive`, `matched_negative`, `wrong_key`, or `hard_negative`. |
-| `state` | `clean`, `marked`, `attacked`, `removed`, or `forged`. `forged` names an artifact carrying a watermark with a message different from the adapter oracle's fixed one. Expected detection depends on the adapter: VideoSeal checks the fixed message, while AudioSeal's presence rule can still report `detected` for a foreign message. The study records message accuracy separately. |
+| `state` | `clean`, `marked`, `attacked`, `removed`, or `forged`. `forged` names an artifact carrying a watermark with a message different from the adapter oracle's fixed one. Expected detection depends on the adapter: PixelSeal and VideoSeal check the fixed message, while AudioSeal's presence rule can still report `detected` for a foreign message. Perth has an implicit fixed mark and no message payload, so it has no meaningful forged arm. The study records message accuracy separately where the scheme exposes a message. |
 | `path`, `sha256` | Artifact path and pinned content digest. |
 | `reference_path`, `reference_sha256` | Both strings or both `null`; the fidelity reference. |
 | `source_revision` | Corpus, generator, or acquisition revision. |
@@ -73,6 +73,10 @@ the case identity and records the repository commit, whether tracked files were
 dirty, and SHA-256 digests of the benchmark kernel and adapter source. Detector
 dependency absence is `unavailable`; an undecodable artifact or adapter
 exception is `error`. Neither is counted as `not_detected`.
+
+Message-matched adapters record `detection.message_bit_accuracy`. Score-based
+presence adapters record `detection.score`. A missing field means the adapter
+does not expose that quantity; it is not a numeric zero.
 
 `detection.adapter_elapsed_ms` measures the wall time of the named detector
 adapter call only. Image decoding and fidelity calculation are outside that
@@ -111,12 +115,112 @@ as a binary string, so a case whose payload differs from the embedded one is
 still `detected` with a different label, never `not_detected`. A `wrong_key`
 arm for this adapter is therefore a different-message row, not a clean row.
 
+The `perth` adapter reads `scripts/perth_oracle.py`, which pins Resemble AI's
+[Perth source](https://github.com/resemble-ai/Perth/tree/ff1c8ac55a976971245cdd53c18d6131ca00d993)
+at commit `ff1c8ac` and verifies the bundled
+`perth_net_250000.pth.tar` checkpoint as
+`sha256:a15bce457ebc53ce5e6c9c3f11df78cf7ee2bf9cdab0a798902135b4c4027670`.
+The upstream package name is `resemble-perth`, the pinned source declares
+version 1.1.0, and its [license is MIT](https://github.com/resemble-ai/Perth/blob/ff1c8ac55a976971245cdd53c18d6131ca00d993/LICENSE).
+That permits a public, development-only oracle. The published 1.0.1 wheel
+pins an obsolete Torch stack, so the benchmark installs the exact source
+revision without adding it to project or runtime dependencies. Perth v1 is an
+implicit presence mark: the detector exposes one confidence and upstream's
+strictly-above-0.5 decision rule, but no user message. The kernel therefore
+records `score`, uses `label: perth-v1` only above threshold, and leaves
+message accuracy not applicable.
+
 Audio fidelity compares the decoded sample arrays against the explicit
 reference: identical decoded samples produce `snr_db: null` with
 `snr_status: unbounded_identical`, never a misleading numeric zero; a silent
 reference reports `zero_reference_power`; a length mismatch stays an explicit
 `incomparable` state. SNR here is reference signal power over error power, the
 sample-domain analogue of the image PSNR contract.
+
+## Perth and PixelSeal local oracle study
+
+`scripts/perth_pixelseal_study.py` builds a local-only study from three
+deterministic synthetic audio carriers, three macOS system-voice speech
+carriers, and two publication-cleared tracked image carriers. It never calls a
+provider oracle or uploads an artifact. Generated media, the strict manifest,
+and results stay outside git.
+
+PixelSeal comes from Meta's
+[VideoSeal source tree](https://github.com/facebookresearch/videoseal/tree/870ca7fb33578b90f14c602016b6c2788096226e),
+package `videoseal`, at the same exact `870ca7f` revision as the VideoSeal
+oracle. The project and weights are
+[MIT licensed](https://github.com/facebookresearch/videoseal/blob/870ca7fb33578b90f14c602016b6c2788096226e/LICENSE).
+The adapter verifies the official
+[PixelSeal model card](https://github.com/facebookresearch/videoseal/blob/870ca7fb33578b90f14c602016b6c2788096226e/videoseal/cards/pixelseal.yaml)
+as `sha256:96c4a448f7d81810780e5bde5a51b039db544b7ec2baf65a605302c1b17362c9`
+and its 1,237,429,197-byte `checkpoint.pth` as
+`sha256:0c5665cff20eb6ce1b5aaa7d91c19dafb418bfee32d02dd3344e4ed60d9d75bd`.
+The source metadata declares package version 1.0. The 1.0.1 PyPI wheel omits
+the PixelSeal card, so this development oracle likewise requires the exact
+source revision and remains outside installed CLI and library paths. Its
+explicit matched-message decision is 256-bit accuracy at or above 0.9, aligned
+with the VideoSeal adapter; this is the benchmark's rule, not a general
+watermark-presence classifier.
+
+```bash
+uv run python scripts/perth_pixelseal_study.py \
+  --output-dir .local-eval/perth-pixelseal-2026-09-28-v4
+```
+
+### Development baseline, 2026-09-28
+
+The final local run used recipe
+`sha256:b43953678294d97a72bb323623797ec8d7b8e476b101485e9ecfefbe02353c0e`,
+kernel
+`sha256:26dce20f42f7131daa4885eed073baf7372ebb07c0e8ccb4ec50cd603da082bf`,
+Perth oracle
+`sha256:a99b9b64a7667b2ee46ac8b57e7c29eec6b13646e3297856e67816984f1a3a9c`,
+and PixelSeal oracle
+`sha256:fc15c444e21404c1413d94251e7746964a347d9596faecfdd94b5e45ab2d0949`.
+Its manifest is
+`sha256:ecdcca929a73b127db3682636f8a2322fc128abb632f3b779e415a7130e0150d`,
+case rows are
+`sha256:ec0a794f5a6580e7bc50e122e1ebae0ea193c9b35b69c7408126d00304c45b38`,
+and study metadata is
+`sha256:5906d8ef48132f0fb371e052870a67a682d4b85c7c5c0e23730a951dca970cc1`.
+All asserted rows matched their expected result; unresolved synthetic Perth
+positives remain measurements rather than hidden failures.
+
+| Adapter and state | Cases | Detected | Not detected | Message accuracy or score |
+| --- | ---: | ---: | ---: | --- |
+| PixelSeal clean | 2 | 0 | 2 | 0.473-0.504 fixed-message accuracy |
+| PixelSeal marked | 2 | 2 | 0 | 1.000 on both |
+| PixelSeal JPEG q90 | 2 | 2 | 0 | 0.996-1.000 |
+| PixelSeal foreign-message forged | 2 | 0 | 2 | 0.469-0.473 against the fixed message |
+| Perth speech clean | 3 | 0 | 3 | 0-0.016 confidence |
+| Perth speech marked | 3 | 3 | 0 | 1.000 confidence |
+| Perth synthetic clean | 3 | 0 | 3 | 0-0.000083 confidence |
+| Perth synthetic marked | 3 | 1 | 2 | 0.190, 0.246, and 1.000 confidence |
+
+PixelSeal embedding measured 46.15-49.46 dB PSNR against the two clean
+carriers. JPEG q90 retained the mark at 37.19-39.87 dB PSNR. The fixed-message
+verifier rejected both images carrying the foreign message; that proves only
+matched-key rejection, not absence of a PixelSeal payload.
+
+Perth was reliable on the in-domain speech sample but carrier-dependent on the
+deliberately out-of-domain synthetic set: only white noise crossed the rule,
+while the tone stack and pinkish noise remained at 0.190 and 0.246. The three
+synthetic marked rows measured 12.91-14.98 dB SNR. Perth's internal 16 to 32 to
+16 kHz resampling shortened the three marked speech outputs by 53-104 samples,
+so the kernel correctly records their SNR as `incomparable` rather than
+silently trimming them.
+
+The production visible-video cleaning path removed the visible mark from all
+24 frames while copying the marked AAC packets byte-for-byte. Both the source
+and cleaned audio scored 1.000, and the source and output packet streams share
+`sha256:d6be870baea63ef8dceea97b2c04b27a1a35ba3bd1500cd022ccb167fd0795c6`.
+This directly confirms that the current video pipeline does not affect Perth.
+
+PixelSeal removal was not run on this Apple Silicon host. The applicable
+`qwen-zimage`, `sdxl-zimage`, and `chroma-zimage` invisible-removal profiles
+require an NVIDIA CUDA device; MPS is not a supported execution path. The
+missing removed-state rows are therefore an explicit hardware gap, not a clean
+or failed result.
 
 ## Audio cohort v1
 
