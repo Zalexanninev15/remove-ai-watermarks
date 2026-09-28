@@ -687,6 +687,28 @@ decides, though: the worst clean boundary 0.25 plus one full observed spread
 (0.25 - 0.10) is 0.40, and at 0.40 the limiting carrier reaches LPIPS 0.270
 and 14.6 dB against `qwen-zimage`'s 0.183 and 18.9 dB. Even with no margin, at
 0.25 it is level (0.185, 16.9 dB). klein is not a replacement global stage
-for either vendor. Outputs, reports and
+for either vendor.
+
+`scripts/fidelity_metrics.py` (OCR NED against the verified
+`data/evaluations/fidelity/ground-truth.json` where it has an entry, OCR of
+the original otherwise; ArcFace identity and face-crop sharpness; full-image
+LPIPS) at each engine's clean strengths confirms it, and shows where the
+512-pixel LPIPS above misled:
+
+| Carrier | Faces | Text | `qwen-zimage` at floor | klein |
+| --- | ---: | --- | --- | --- |
+| OpenAI face grid | 9 | none | ID 0.853, face sharpness 0.61 | 0.10: ID 0.689; 0.20: ID 0.472 |
+| OpenAI typography (2) | 0 | Latin, verified | NED 0.545 / 0.562 | 0.20: NED 0.725 / 0.688 |
+| Google party scene | 5 | Latin | ID 0.933, NED 0.386 | 0.10: ID 0.500, NED 0.271; 0.20: ID 0.226, NED 0.450 |
+| Google crowd | 18 | none readable | ID 0.752 | 0.10: ID 0.634, face sharpness 0.05 |
+| Google sign | 0 | Cyrillic | NED 0.367 | 0.20: NED 0.265 |
+| Google CJK | 0 | CJK, verified | NED 0.074 | 0.25: NED 0.296; 0.40: NED 0.667 |
+
+klein keeps Latin and Cyrillic sign lettering better on two Google carriers,
+but it loses every face comparison (identity 0.23-0.69 against 0.75-0.93, and
+face crops smoothed to 5-18% of the original's Laplacian variance on the
+large Google frames) and the verified CJK text. The face gap is partly the
+configuration, since `qwen-zimage` includes its source-based face stage and
+klein ran global-only; the CJK loss is not. Outputs, reports and
 oracle records: `.local-eval/flux2-klein-2026-09-27/`.
 
