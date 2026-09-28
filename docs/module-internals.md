@@ -2238,9 +2238,11 @@ runs the same two-stage recipe on a Chroma1-HD (`lodestones/Chroma1-HD`,
 Apache-2.0) global pass through diffusers' `ChromaImg2ImgPipeline`. It is the
 answer to issue #88's FLUX.2 request through the model that actually exposes
 strength-controlled img2img in that family. diffusers has since added
-`Flux2KleinInpaintPipeline` with a real strength path, so the earlier "FLUX.2
-is not integrable" conclusion is superseded pending a measured FLUX.2 klein
-stage; the full research record is
+`Flux2KleinInpaintPipeline` with a real strength path. A FLUX.2 klein 4B global
+stage was measured on 2026-09-27 and not adopted: the stock pipeline feeds the
+clean source back as reference tokens and keeps SynthID, and without them klein
+clears both vendors only at lower face and CJK-text fidelity than `qwen-zimage`.
+The full research record is
 [`chroma1-engine-research.md`](chroma1-engine-research.md).
 
 The profile also implements the shared verified-text donor hook through its already

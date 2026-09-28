@@ -276,10 +276,12 @@ output `a,b`) and `AB` (output `L`, source `a,b`).
 - At 0.35 the regeneration redraws objects, and transplanted source chroma
   paints the old objects' colors onto the new ones as visible ghosts.
 
-Not shipped. Source chroma is not a safe channel for Google's mark. The
-Y/Cb/Cr scramble splits above placed OpenAI's mark in luma; for Google either
-the decoder reads more than luma or the Lab-to-RGB conversion carries source
-structure back into it, and these arms do not separate the two. A
+Not shipped. Source chroma is not shown safe for Google's mark: one explicit
+"inconclusive" against four clean untouched outputs is a warning, not a
+measured leak. The Y/Cb/Cr scramble splits above placed OpenAI's mark in luma;
+if Google's does come back, either its decoder reads more than luma or the
+Lab-to-RGB conversion carries source structure back into it, and these arms
+do not separate the two. A
 structure-gated transplant restricted to OpenAI is
 the only arm left open, and its gain would be color fidelity at a floor that
 already clears with margin. Hash-bound batch and verdicts:

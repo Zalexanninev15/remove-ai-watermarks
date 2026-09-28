@@ -56,16 +56,17 @@ This page is an index. Each finding lives in its canonical page.
   the content, in `ReservedCode1` and `ReservedCode2`. The library accepts those
   fields as label evidence but does not verify the signature.
 - **Experiments.** Chroma restoration after regeneration (arXiv:2508.21072) was
-  measured on 2026-09-27 and is not shipped: transplanted source chroma left
-  three of four Gemini checks inconclusive and ghosts redrawn objects
+  measured on 2026-09-27 and is not shipped: transplanted source chroma drew one
+  explicit "inconclusive" and two unclear Gemini answers where the untouched
+  outputs were all clean, and ghosts redrawn objects
   ([removal research](synthid-removal-research.md#color-restoration-after-regeneration-2026-09-27)).
   FLUX.2 klein 4B was measured the same day: stock inpainting copies the
   source through its reference tokens and keeps OpenAI SynthID, and without
-  them it clears both vendors only at lower fidelity than `qwen-zimage` once
-  its Google operating point carries the usual cross-source margin
+  them it clears both vendors only at lower face and CJK-text fidelity than
+  `qwen-zimage`
   ([Chroma1 research](chroma1-engine-research.md#flux2-klein-as-a-global-stage-2026-09-27)).
   Still open:
-  Z-Image-Turbo as global stages (with an Apple Silicon arm through mflux),
+  Z-Image-Turbo as a global stage (with an Apple Silicon arm through mflux),
   linear probes on newer frozen backbones for `classify`, Resemble Perth and
   Meta PixelSeal as benchmark oracles, re-watermarking as a removal primitive
   (arXiv:2605.16796, MIT code), RAVEN view-synthesis removal
