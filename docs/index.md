@@ -56,6 +56,7 @@ The current behavior is defined by the code, tests, README, and user guides.
 - [Text protection research](text-protection-research.md)
 - [Audio provenance experiment](audio-provenance-experiment.md) (local AudioSeal matched-oracle study of video audio tracks across visual cleaning)
 - [VideoSeal temporal evaluation](videoseal-temporal-evaluation.md) (per-frame scores, aggregation matrix, and crf decay on synthetic and real clips)
+- [Temporal video inpainting evaluation](video-inpainting-research.md) (VACE and ROSE against the shipped visible-video fills)
 - [Watermark forgery study](watermark-forgery-study.md) (four-state model and double-embedding: the last writer wins under both oracles)
 - [C2PA resolution research](c2pa-resolution-research.md) (measured resolver contracts, the privacy gradient, and the decision to never resolve over the network)
 - [External benchmark licensing](external-benchmark-licensing.md) (ETI license-blocked, W-Bench dataset MIT with non-commercial code, verified 2026-09-07)

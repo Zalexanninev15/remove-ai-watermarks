@@ -65,13 +65,17 @@ This page is an index. Each finding lives in its canonical page.
   them it clears both vendors only at lower face and CJK-text fidelity than
   `qwen-zimage`
   ([Chroma1 research](chroma1-engine-research.md#flux2-klein-as-a-global-stage-2026-09-27)).
+  Apache-2.0 temporal video inpainting was also measured: VACE and ROSE were
+  less stable than MI-GAN on all three Sora, Veo, and Kling clips, VACE left a
+  gray block on Veo, and ROSE retained the Veo wordmark on 17/17 frames. They
+  are not shipped
+  ([video inpainting research](video-inpainting-research.md)).
   Still open:
   Z-Image-Turbo as a global stage (with an Apple Silicon arm through mflux),
   linear probes on newer frozen backbones for `classify`, Resemble Perth and
   Meta PixelSeal as benchmark oracles, re-watermarking as a removal primitive
   (arXiv:2605.16796, MIT code), RAVEN view-synthesis removal
-  (arXiv:2601.08832, no code released as of 2026-09-24), and Apache-2.0 video
-  inpainting (VACE, ROSE) against the per-frame visible video fill.
+  (arXiv:2601.08832, no code released as of 2026-09-24).
   MiniMax-Remover (CC-BY-NC-4.0 weights) and ProPainter (S-Lab License,
   non-commercial) are excluded on license.
 - **New C2PA signers without a vendor row.** The

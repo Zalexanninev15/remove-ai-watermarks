@@ -472,6 +472,14 @@ backgrounds need MI-GAN or LaMa for better reconstruction. Invisible video
 stages must continue to reuse the image and metadata implementations rather
 than copying their logic.
 
+Apache-2.0 temporal video inpainting was measured on 2026-09-27 and is not a
+backend: VACE and ROSE had higher masked frame-to-frame error than MI-GAN on
+all three publication-cleared Sora, Veo, and Kling clips. VACE left a gray
+block on Veo, while ROSE visibly reproduced the wordmark and made the Veo
+detector accept 17/17 output frames. The model pins, mask-conditioning audit,
+decoded metrics, H100 cost, and frame review are in the
+[temporal video inpainting evaluation](video-inpainting-research.md).
+
 Regression coverage:
 
 - [`test_video.py`](../tests/test_video.py), including a real ffmpeg full-clip

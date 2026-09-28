@@ -79,6 +79,9 @@ independent frame fill.
 | `auto` | Depends on installed extras | Selects LaMa, then MI-GAN, then OpenCV |
 
 The learned backends download model files on first use.
+[VACE and ROSE were evaluated](video-inpainting-research.md) on the same
+production masks and were not adopted: neither improved temporal stability
+over MI-GAN, and ROSE retained the Veo mark.
 
 ## Metadata and provenance
 
