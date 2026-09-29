@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
@@ -96,3 +97,27 @@ class TestAggregationFormulas:
 
         with pytest.raises(ValueError, match="unknown aggregation"):
             videoseal_oracle._aggregate_bit_preds(torch.zeros(2, 4), "median")
+
+
+class TestImageMode:
+    def test_image_helpers_preserve_layout_and_decode_message_columns(self) -> None:
+        torch = pytest.importorskip("torch")
+        message = (1, 0, 1, 0)
+
+        class Model:
+            def embed(self, tensor: object, bits: object, *, is_video: bool) -> object:
+                assert is_video is False
+                torch.testing.assert_close(bits, torch.tensor([message], dtype=torch.float32))
+                return tensor
+
+            def detect(self, tensor: object, *, is_video: bool) -> object:
+                assert is_video is False
+                assert tuple(tensor.shape) == (1, 3, 2, 4)
+                return {"preds": torch.tensor([[9.0, 1.0, -1.0, 1.0, -1.0]])}
+
+        pixels = np.arange(24, dtype=np.float32).reshape(2, 4, 3) / 24.0
+
+        marked = videoseal_oracle.embed_image(Model(), pixels, message)
+
+        np.testing.assert_allclose(marked, pixels)
+        assert videoseal_oracle.decode_image(Model(), marked) == message

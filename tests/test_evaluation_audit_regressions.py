@@ -151,10 +151,7 @@ def test_temporal_study_measures_only_saved_decodes(monkeypatch, tmp_path):
     monkeypatch.setattr(study, "encode_clip", encode)
     monkeypatch.setattr(study, "apply_scale", lambda _f, _p, d: encode(_f, d / "scale.mp4", raw))
     monkeypatch.setattr(study, "apply_fps_half", lambda _f, _p, d: encode(_f, d / "fps.mp4", raw))
-    import watermark_benchmark as benchmark
-
-    monkeypatch.setattr(benchmark, "_decode_video", lambda path: decoded[path])
-    monkeypatch.setattr(study, "_decode_video", lambda path: decoded[path])
+    monkeypatch.setattr(study, "decode_video_artifact", lambda path: (decoded[path], "f" * 64))
     monkeypatch.setattr(study, "read", read)
     monkeypatch.setattr(study, "read_aggregation_matrix", matrix)
     monkeypatch.setattr(study, "render_matrix", lambda rows: "")

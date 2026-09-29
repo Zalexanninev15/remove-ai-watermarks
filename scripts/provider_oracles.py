@@ -161,7 +161,10 @@ SURFACES: dict[str, OracleSurface] = {
         url="https://gemini.google.com/",
         media_types=("image", "video", "audio"),
         project_evidence=("image", "video"),
-        prompt="Was this image/video/audio created or edited by Google AI?",
+        prompt=(
+            "Does this image/video/audio contain a SynthID watermark? Use the SynthID verification tool only; "
+            "do not infer from visible content, logos, text, or metadata."
+        ),
         clean_result_note="Use not_detected only for an explicit SynthID-negative result; preserve unclear results.",
         account_slots=True,
         network_slots=True,

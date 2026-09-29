@@ -144,6 +144,33 @@ def embed(model: object, frames: object, message: Sequence[int]) -> object:
     return marked.permute(0, 2, 3, 1).numpy()
 
 
+def embed_image(model: object, pixels: object, message: Sequence[int]) -> object:
+    """Embed a message into one RGB image in [0, 1] (H, W, 3)."""
+    import numpy as np
+    import torch
+
+    array = torch.from_numpy(np.ascontiguousarray(pixels, dtype=np.float32))
+    tensor = array.permute(2, 0, 1).unsqueeze(0)
+    msg = torch.tensor([list(message)], dtype=torch.float32)
+    with torch.no_grad():
+        marked = model.embed(tensor, msg, is_video=False)
+    return marked[0].permute(1, 2, 0).numpy()
+
+
+def decode_image(model: object, pixels: object) -> tuple[int, ...]:
+    """Decode the message bits from one RGB image."""
+    import numpy as np
+    import torch
+
+    array = torch.from_numpy(np.ascontiguousarray(pixels, dtype=np.float32))
+    tensor = array.permute(2, 0, 1).unsqueeze(0)
+    with torch.no_grad():
+        predictions = model.detect(tensor, is_video=False)
+    if isinstance(predictions, dict):
+        predictions = predictions["preds"]
+    return tuple(int(bit) for bit in (predictions[:, 1:] > 0).to(torch.int64).view(-1).tolist())
+
+
 def _aggregate_bit_preds(bit_preds: object, aggregation: str) -> object:
     """Aggregate per-frame bit logits exactly as upstream ``extract_message``.
 

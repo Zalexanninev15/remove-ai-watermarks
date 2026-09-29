@@ -228,25 +228,167 @@ regeneration is already in [synthid.md](synthid.md#23-removal-attacks-and-forens
 | Cao et al., [arXiv:2608.10166](https://arxiv.org/abs/2608.10166) (MarkNull, USENIX Security 2026) | On-manifold latent decorrelation via a public diffusion proxy. Claims 100% on 20 Imagen-3 Gemini-verify images. PSNR 25.36 dB, SSIM 0.80 | Small Gemini-verify set | Independent evidence that a no-box latent reconstruction can confuse Gemini. Does not meet this project's 40 dB / 0.99 SSIM release gate. Still generation, not a pixel-only wipe |
 | Goonatilake and Ateniese, [arXiv:2605.09203](https://arxiv.org/abs/2605.09203) | Six removers all leave a forensic residue a ResNet-50 sees at >98% TPR @ 1% FPR | Applies to UnMarker, Zhao's WatermarkAttacker, CtrlRegen+ | Defeating a provider oracle is not deniability. This is the product remainder |
 | An et al., [arXiv:2401.08573](https://arxiv.org/abs/2401.08573) (WAVES, ICML 2024) | 26 attacks on StegaStamp, Stable Signature, Tree-Ring. Regeneration, not JPEG, is the attack that matters. StegaStamp TPR@1%FPR 1.00 to 0.01; Tree-Ring 0.99 to 0.12 | Open watermarks | Protocol. Our blur-sigma-7 and 16-32 scramble are closer to WAVES "distortion" than to regeneration |
+| Bulychev et al., [arXiv:2605.16796](https://arxiv.org/abs/2605.16796) (Watermarks Attack Watermarks) | Apply a second watermark, usually with the victim's own post-processing encoder and a different message. On MS-COCO, its end-to-end pipeline lowers Video Seal victim bit accuracy from 0.998 to 0.520 (TPR@1%FPR 0.046) and Pixel Seal from 0.999 to 0.514 (TPR 0.029); the same-method attacker message recovers at 0.99 bit accuracy for both schemes. Quality is reported as an eight-metric normalized composite, not a raw PSNR operating point | Eight open image schemes, not production SynthID; Video Seal is tested on images | Directly motivated the [local open-encoder replication](#re-watermarking-on-open-encoders-2026-09-27). Its MIT [code](https://github.com/MariaBulychev/Watermarks-Attack-Watermarks/tree/0444f52ad972da9e009555f2dc1028d9abe0610e) calls external encoder packages and weights; the top-level license does not license those dependencies |
 | Wen et al., [arXiv:2305.20030](https://arxiv.org/abs/2305.20030) (Tree-Ring) | In-generation Fourier pattern in initial noise | Not SynthID | Kill is DDIM inversion plus latent wipe, not a pixel scramble. Lin and Juarez [arXiv:2506.10502](https://arxiv.org/abs/2506.10502) (USENIX 2025) remove it from public knowledge |
 | Fernandez et al., Stable Signature, ICCV 2023 | Fine-tuned VAE decoder | Not SynthID | Regeneration that replaces the decoder is in-family. Our foreign VAE at 22.3 dB did not kill OpenAI SynthID, which is the expected mismatch |
 | Google to [The Verge, 2026-04-14](https://www.theverge.com/ai-artificial-intelligence/911579/google-synthid-ai-watermarking-system-reverse-engineered) | reverse-SynthID does not systematically remove SynthID | Google spokesperson on the spectral bypass | Agrees with our V4 audit and with Bypass: reconstruction or decoder confusion, not a payload delete |
 
 Quiet pixel-only removal is not a published result on production
-OpenAI or Google SynthID (still true in the 2026-09-22 literature sweep).
-Against open encoders the fidelity band has moved: re-watermarking
-([arXiv:2605.16796](https://arxiv.org/abs/2605.16796)), WmForger
+OpenAI or Google SynthID (still true in the 2026-09-27 literature sweep).
+Against open encoders the fidelity band has moved: WmForger
 ([arXiv:2510.20468](https://arxiv.org/abs/2510.20468)) and Hide&Seek
 ([arXiv:2603.01067](https://arxiv.org/abs/2603.01067)) report roughly 30 dB,
 and SPFM-Net and FDDWAN (arXiv:2607.27811, 2607.27800) claim 40-45 dB, but on
 small images and with bit error rates that leave much of the payload intact.
-None of these is a result on a production closed watermark.
+The re-watermarking paper reports normalized quality degradation, not a raw
+PSNR aggregate; our separate local measurements are below. None of these is a
+result on a production closed watermark.
 
 ## Product remainder for removal
 
 Invisible removal in this package regenerates through `qwen-zimage` or
 `sdxl-zimage`. It is lossy. There is no shipped pixel-only OpenAI or
 Google SynthID wipe. Do not add Bayer or geometry as remover arms.
+
+### Re-watermarking on open encoders (2026-09-27)
+
+The CC BY 4.0 [paper](https://arxiv.org/abs/2605.16796), v1 submitted on
+2026-05-16, tests eight open image watermarks: Stable Signature and Tree-Ring
+(in-generation), and StegaStamp, RoSteALS, ZoDiac, Pixel Seal, WAM, and Video
+Seal (post-processing). Its policy
+reapplies the victim encoder with a different message for post-processing
+marks and uses ZoDiac against in-generation marks. Its Video Seal evaluation
+is on images, not video. The [MIT repository](https://github.com/MariaBulychev/Watermarks-Attack-Watermarks/tree/0444f52ad972da9e009555f2dc1028d9abe0610e)
+is pinned at `0444f52` and imports separate upstream encoders. We reproduced
+the same-encoder, different-message operation with the project's pinned
+oracles, not the paper's full WAVES dataset, classifier, or exact dependency
+stack. TrustMark and DWT-DCT are project extensions, not paper subjects.
+
+Twelve publication-cleared, provider-paired images from six content strata
+were fitted to 512 x 512 pixels. Message A was embedded and serialized to PNG;
+message B was then embedded into that decoded artifact and serialized again.
+All decoder and fidelity readings used the saved RGB bytes. A successful case
+requires a positive A control, an A-negative final verdict, and a B-positive
+final verdict under that scheme's pinned rule. The table reports mean final
+bit accuracy and median clean-to-final PSNR over valid A controls only.
+
+| Encoder and direction | Valid A controls / all | B replaces A / valid | Final accuracy A / B | Median total PSNR |
+| --- | ---: | ---: | ---: | ---: |
+| DWT-DCT, FLUX codeword to SDXL codeword | 6 / 12 | 6 / 6 | 0.563 / 1.000 | 39.80 dB |
+| DWT-DCT, SDXL codeword to FLUX codeword | 6 / 12 | 6 / 6 | 0.566 / 0.997 | 39.73 dB |
+| TrustMark P, 61-bit messages | 12 / 12 | 12 / 12 | 0.541 / 1.000 | 44.15 dB |
+| VideoSeal image mode, 256-bit messages | 12 / 12 | 12 / 12 | 0.479 / 0.990 | 43.89 dB |
+
+The DWT-DCT codewords differ at only 21 of 48 bits, so A accuracy near 0.56
+after B is compatible with complete replacement; it is not evidence of a
+surviving A signal. Conversely, its 6/12 A-positive rate in each direction
+precludes an unconditional success claim. These are fixed messages and a
+small, deliberately stratified cohort, not a calibrated TPR@1%FPR estimate.
+The worst-valid-case contact sheet shows no obvious coarse artifacts at
+256-pixel viewing size, but PSNR and that sheet do not establish full-resolution
+perceptual, face, or text fidelity.
+
+The [corrected forgery study](watermark-forgery-study.md#corrected-videoseal-measurements-2026-09-08)
+already showed VideoSeal replacement on saved video. A fresh run added
+decoded-artifact fidelity on two 64-frame, 256 x 256, H.264 CRF 8 clips:
+the synthetic moving gradient went from A accuracy 1.000 to 0.469 and B
+accuracy 1.000 at 42.88 dB mean clean-to-final PSNR; the publication-cleared
+Sora clip went from A 1.000 to 0.473 and B 0.996 at 37.60 dB. Both meet the
+fixed-message replacement rule. This is an extension to video, not a paper
+replication or a guarantee across codecs and sources.
+
+`scripts/rewatermarking_study.py` and `scripts/rewatermarking_video_study.py`
+write case rows, artifact hashes, and reports under the untracked
+`.local-eval/rewatermarking-2026-09-27/` and
+`.local-eval/rewatermarking-video-2026-09-27/`. Case-row SHA-256 values are
+`3270df31320c0c58091f34b9c2e1f4885190fe65577e0dbbe03446b2b8bda890`
+and `150e6584d5f253e52ddb0024ab9ad17f94b03b64dbfd4c293d57f6c6510607c6`.
+The retained PNGs and MP4s were independently rehashed and decoded for PSNR
+verification. Both runs used the local CPU; no Modal GPU was used and there
+was no cloud GPU charge. This establishes a local open-encoder overwrite
+primitive, not a production SynthID remover. An open encoder's foreign message
+may coexist with a secret-keyed provider mark.
+
+### Production SynthID overmark probe (2026-09-27 local)
+
+One previously oracle-positive, publication-cleared original per provider
+was selected from `data/synthid/manifest.csv`. The initial preparation made a
+native-resolution RGB pixel control and a VideoSeal image-mode 256-bit
+message-B overlay. It stripped AI metadata without changing decoded pixels,
+but that rule was insufficient: the Google source retained its visible Gemini
+sparkle. Its Gemini Web checks therefore cannot serve as pixel-only SynthID
+positive controls. The OpenAI case had no visible mark; it remains 1122 x 1402
+at 43.04 dB control-to-overlay PSNR, with B decoded at 1.000. The pair is
+deliberately small and tests coexistence with an *unrelated* open watermark,
+not application of a secret SynthID encoder.
+
+The official OpenAI Content Provenance API reported SynthID `detected` on
+both the metadata-free pixel control and its VideoSeal overlay, with C2PA
+`not_present` for each (2026-09-28 UTC). Thus the successful open-encoder
+overwrite did **not** remove OpenAI SynthID on this carrier.
+
+The separately approved Google control upload reached Gemini Web's exact
+`Connecting to Verify AI` state on 2026-09-28 and remained there well beyond
+the project's documented 90-second indeterminate threshold. A separately
+approved retry of the same prepared SHA-256 reached that state, then returned
+only a generic visual-content answer: Gemini attributed the image to Google AI
+from a visible four-pointed logo and text-rendering characteristics. It exposed
+no settled SynthID tool outcome. Both observations are watermark
+`indeterminate` and provenance `unavailable`, not clean or `detected`. The
+VideoSeal-overlaid Google candidate was not uploaded because the positive
+control gate was not satisfied. Therefore these runs supply no Google SynthID
+verdict and do not test re-watermarking against production Google SynthID.
+
+The preparation protocol now removes detected visible AI marks and AI metadata
+before deriving either arm. On this Google source, the project-native Gemini
+remover validated removal of the sparkle and changed 0.213% of pixels. VideoSeal
+was then applied to that cleaned control: B accuracy is 0.992 and
+control-to-overlay PSNR is 42.86 dB. Visual inspection found no remaining logo;
+the local sparkle detector scored the prepared control 0.300, below its 0.35
+detection threshold. The corrected control SHA-256 is
+`14ed25fa58a0abc928ea869431248b450892facdf85b4621b3bf959c16a78cf3`;
+the corrected candidate is
+`86000c8e143339adde675522dc7709830c8ff230977e276c748cabb5d7cfadb8`.
+The separately approved corrected-control upload first received the generic
+question about whether Google AI created or edited the image. Gemini said the
+amount of text made reliable confirmation difficult and could not confirm its
+origin. That origin question was the wrong contract for a SynthID experiment;
+its answer remains `indeterminate`. A confirmed follow-up asked directly
+whether the same attached image contains a SynthID watermark, required the
+SynthID verification tool, and prohibited inference from visible content,
+logos, text, or metadata. Gemini then returned its settled verification-tool
+positive: the image was created or edited with Google AI, with the Verify AI
+SynthID help link. The corrected control is therefore watermark `detected` and
+provenance `unavailable`. The separately approved candidate upload then used
+the same direct SynthID question on 2026-09-29. Gemini explicitly refused it
+because the verification-tool quota had been exceeded. That result is
+watermark `refused` and provenance `unavailable`, not clean, `detected`, or
+`indeterminate`. With separate approval, the exact same candidate upload was
+then checked once in the `/u/2` slot. Its settled verification-tool response
+said the image contained signals indicating Google-AI generation or editing.
+That batch is watermark `detected` and provenance `unavailable`. Thus the
+42.86 dB VideoSeal overlay did **not** remove Google SynthID on this carrier.
+The control and usable candidate verdict came from different authenticated
+account slots because `/u/1` exhausted its rolling quota; this is a one-carrier
+coexistence result, not an account-invariance or broad production guarantee.
+
+Files, hashes, API response payloads, and result verification live under the
+untracked `.local-eval/rewatermarking-synthid-2026-09-27/`. The OpenAI batch's
+two prepared upload SHA-256 values are
+`f79189bcc98c6e2c0bf9737fa033b83870475560f3bff897c6e80508d90a3336`
+and `6949efa56bbfb285a580994536f8ec623af801187e26ba0f27da895488571340`.
+That two-result immutable batch passed `verify --require-complete`. The first
+Google batch passed hash verification with 1/2 rows recorded. A one-row retry
+batch for the same control passed `verify --require-complete` with one
+`indeterminate` result. The submitted control SHA-256 in both batches is
+`fdb34c868e533a2c3847da868c708b0c6bd5e586523ee7e6d7ee1773b321fbc4`.
+Those batches are retained as evidence of the flawed visible-logo control, not
+as SynthID controls. The corrected local artifacts and direct-SynthID-question
+batches live under `.local-eval/rewatermarking-synthid-logo-clean-2026-09-28/`.
+The control batch's single `detected` record and the candidate batch's single
+`refused` record in `/u/1`, plus the separately approved `/u/2` candidate
+batch's single `detected` record, each passed `verify --require-complete`. No
+cloud GPU was used.
 
 ### Color restoration after regeneration (2026-09-27)
 

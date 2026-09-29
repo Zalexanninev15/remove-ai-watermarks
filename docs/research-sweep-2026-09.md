@@ -76,11 +76,24 @@ This page is an index. Each finding lives in its canonical page.
   packets unchanged; PixelSeal survived JPEG q90 on both cleared image
   carriers, while its CUDA-only removal profiles could not run on this host
   ([benchmark study](benchmark-kernel.md#perth-and-pixelseal-local-oracle-study)).
+  Re-watermarking (arXiv:2605.16796) was reproduced locally on 2026-09-27:
+  same-encoder message B replaced A on all 12/12 valid TrustMark and 12/12
+  VideoSeal image controls, both VideoSeal video clips, and all 6/6 valid
+  controls in each DWT-DCT direction. Median image clean-to-output PSNR was
+  39.73-44.15 dB; the DWT-DCT controls worked on only half the carriers.
+  This is an open-encoder result, not a SynthID result
+  ([removal research](synthid-removal-research.md#re-watermarking-on-open-encoders-2026-09-27)).
+  A one-carrier production probe subsequently kept OpenAI SynthID `detected`
+  on both its metadata-free control and 43.04 dB VideoSeal-overlaid image;
+  a visible-clean, metadata-free Google control and its 42.86 dB VideoSeal
+  overlay also remained `detected` under direct SynthID-tool checks. The Google
+  control and candidate positives came from different approved account slots,
+  so this remains a one-carrier coexistence result
+  ([removal research](synthid-removal-research.md#production-synthid-overmark-probe-2026-09-27-local)).
   Still open:
   Z-Image-Turbo as a global stage (with an Apple Silicon arm through mflux),
-  linear probes on newer frozen backbones for `classify`, re-watermarking as a
-  removal primitive
-  (arXiv:2605.16796, MIT code), RAVEN view-synthesis removal
+  linear probes on newer frozen backbones for `classify`,
+  RAVEN view-synthesis removal
   (arXiv:2601.08832, no code released as of 2026-09-24).
   MiniMax-Remover (CC-BY-NC-4.0 weights) and ProPainter (S-Lab License,
   non-commercial) are excluded on license.

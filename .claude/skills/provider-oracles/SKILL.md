@@ -44,10 +44,19 @@ Playwright CLI runner, copied cookies, or a new login.
    real Chrome profile and navigate directly to
    `https://gemini.google.com/u/<google_account_index>/app`.
 3. Prepare an immutable `gemini-web` batch outside the repository.
+   For every image check, visually inspect the source first. Remove every visible
+   AI-provider logo or label with the project's visible-mark remover, derive all
+   paired controls and candidates from that cleaned image, and let `prepare` strip
+   AI metadata. Inspect the prepared upload again and do not submit it if a visible
+   provider mark remains. A model answer based on a visible logo is not a SynthID
+   result.
 4. Before each upload, request the action-time confirmation required for sending
    that exact prepared file to Gemini. Do not upload the source path directly.
-5. Attach one prepared upload and ask: `Was this image/video/audio created or
-   edited by Google AI?`
+5. Attach one prepared upload and ask: `Does this image/video/audio contain a
+   SynthID watermark? Use the SynthID verification tool only; do not infer from
+   visible content, logos, text, or metadata.` Do not substitute a general
+   Google-AI-origin question; it permits visual-content reasoning instead of a
+   SynthID verdict.
 6. Read the settled SynthID tool outcome, not the surrounding model reasoning.
    Preserve unclear, quota, and refusal wording rather than interpreting it as
    clean.

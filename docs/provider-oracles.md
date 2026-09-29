@@ -327,6 +327,17 @@ byte for byte; the manifest explicitly records that their metadata was not
 stripped. Use the matched-control protocols in [`synthid.md`](synthid.md) for
 video claims.
 
+Before preparing any image for a SynthID oracle, visually inspect it and remove
+every visible AI-provider logo or label with the project's visible-mark remover.
+Derive both the positive control and every processed candidate from that same
+visible-clean source, then run `prepare` to strip metadata losslessly. Inspect the
+prepared upload again and refuse the request if a visible provider mark remains.
+This separation is mandatory: Gemini can answer from a visible sparkle or from
+image-content reasoning without returning a SynthID tool verdict. Record such an
+answer as `indeterminate`, never `detected`. The source-to-visible-clean pixel
+change belongs in the experiment report; `prepare`'s pixel-preservation claim is
+only from that cleaned source to the metadata-stripped upload.
+
 The batch contains:
 
 - `manifest.json`, immutable surface, slot, source, upload, and hash identities;
@@ -368,6 +379,13 @@ requires the user's existing authenticated Chrome session. Invoke the project
 `provider-oracles` skill to prepare the batch, select the named real Chrome
 profile and `/u/N/` Google account, upload each prepared artifact, capture the
 settled SynthID tool outcome, and record it.
+
+Ask the direct question stored in the batch manifest: `Does this
+image/video/audio contain a SynthID watermark? Use the SynthID verification
+tool only; do not infer from visible content, logos, text, or metadata.` A
+general question about whether Google AI created or edited the media is not
+equivalent: it may elicit origin or visual-content reasoning without a SynthID
+verdict.
 
 OpenAI Web, Microsoft Web, and Meta run entirely through a fresh isolated
 Playwright browser. A direct-route example:

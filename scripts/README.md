@@ -70,6 +70,9 @@ explicitly names a tracked canonical result.
 | `qwen_scrub_prototype.py` | Probe low-strength Qwen regeneration on a GPU. |
 | `selective_text_restoration.py` | Evaluate text restoration over a scrubbed image. |
 | `synthid_pixel_probe.py` | Run the experimental local SynthID carrier probe. |
+| `rewatermarking_study.py` | Measure same-encoder message replacement and decoded-pixel fidelity on publication-cleared images with the open DWT-DCT, TrustMark, and VideoSeal image encoders. |
+| `rewatermarking_video_study.py` | Measure VideoSeal message replacement and mean PSNR on saved synthetic and publication-cleared MP4 clips. |
+| `rewatermarking_synthid_candidates.py` | Remove visible AI marks and metadata, then prepare native-resolution controls and VideoSeal-overlaid variants from two cleared SynthID-positive originals without making provider requests. |
 | `video_synthid_sweep.py` | Build oracle-gated video regeneration candidates. |
 
 ## Generated assets

@@ -30,6 +30,10 @@ def test_catalog_covers_every_project_vendor_oracle_surface() -> None:
     assert oracles.SURFACES["gemini-web"].automation == "real_browser"
     assert oracles.SURFACES["meta-web"].automation == "playwright"
     assert oracles.SURFACES["gemini-web"].media_types == ("image", "video", "audio")
+    assert oracles.SURFACES["gemini-web"].prompt == (
+        "Does this image/video/audio contain a SynthID watermark? Use the SynthID verification tool only; "
+        "do not infer from visible content, logos, text, or metadata."
+    )
 
 
 def test_default_slot_config_is_repository_local() -> None:
