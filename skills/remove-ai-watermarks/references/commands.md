@@ -22,7 +22,7 @@ remove-ai-watermarks visible image.png --keep-metadata -o clean.png
 
 Image mark keys: `gemini`, `doubao`, `jimeng`, `qwen`, `wan`, `kling`, `yuanbao`,
 `samsung`, `runninghub`, `baidu`, `liblib`, `liblib_pill`, `microsoft`,
-`generic_ai_label`, `openart`, `jimeng_pill`. Default
+`generic_ai_label`, `openart`, `jimeng_pill`. `wan` is new (since CLI 0.43.0). Default
 `--mark auto` removes every selected match. `microsoft` is the top-right AI
 badge, separate from the invisible InvisMark watermark on the same vendor's
 images. `jimeng_pill` is a weak detector and needs corroboration. The compact
@@ -125,7 +125,7 @@ remove-ai-watermarks video batch ./videos --mode all
 ```
 
 Video mark keys: `sora`, `veo`, `seedance`, `doubao`, `dola`, `hailuo`,
-`vidu`, `kling`. Default `--mark auto` picks the first temporally stable match in that
+`vidu`, `kling`; `vidu` is new (since CLI 0.43.0). Default `--mark auto` picks the first temporally stable match in that
 order.
 
 `video invisible` and `video all --invisible` accept MP4, MOV, and M4V only.
