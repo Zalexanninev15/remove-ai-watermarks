@@ -90,10 +90,25 @@ This page is an index. Each finding lives in its canonical page.
   control and candidate positives came from different approved account slots,
   so this remains a one-carrier coexistence result
   ([removal research](synthid-removal-research.md#production-synthid-overmark-probe-2026-09-27-local)).
-  Still open:
-  Z-Image-Turbo as a global stage (with an Apple Silicon arm through mflux),
-  linear probes on newer frozen backbones for `classify`,
-  RAVEN view-synthesis removal
+  Z-Image-Turbo was measured on 2026-09-29. It is not a global replacement:
+  at its OpenAI margin point it improves both no-face typography carriers but
+  loses face identity, and the same face/text split is stronger in the Google
+  fidelity probe. The Google no-face outputs at 0.40 also visibly redraw scene
+  geometry and object detail, despite better OCR and aggregate metrics, so a
+  face detector alone cannot make a safe complement. The last Google boundary
+  is unresolved because the available oracle checks were quota-blocked or
+  could not accept the prepared upload.
+  The mflux arm works on an M5 with 32 GB and is the only measured native Apple
+  Silicon image-regeneration path, since every shipped image profile is
+  CUDA-only. It took 301-380 seconds per image. This proves M5 feasibility but
+  is not a usable fallback at the measured quality
+  ([Chroma1 research](chroma1-engine-research.md#z-image-turbo-as-a-global-stage-2026-09-29)).
+  The experiment is closed with a decision not to add a global or mflux
+  profile; retain its harness and local evidence for future comparison only.
+  The existing source-conditioned Z-Image face-repair stage remains part of
+  `qwen-zimage`, `sdxl-zimage`, and `chroma-zimage`.
+  Still open: linear probes on newer frozen backbones for `classify` and RAVEN
+  view-synthesis removal
   (arXiv:2601.08832, no code released as of 2026-09-24).
   MiniMax-Remover (CC-BY-NC-4.0 weights) and ProPainter (S-Lab License,
   non-commercial) are excluded on license.

@@ -164,9 +164,16 @@ faces. The general fidelity corpus and its OCR caveats are tracked in
 [`data/evaluations/fidelity/`](../data/evaluations/fidelity/README.md), while the
 current-floor Google replication is recorded in
 [`module-internals.md`](module-internals.md#google-boundary-replication-2026-09-15).
-A global Z-Image Turbo prototype preserved text substantially better at low
-strength, but it has no useful cross-provider operating point and is not a
-supported profile. Automatic text restorers also remain research-only:
+A global Z-Image Turbo prototype preserved text substantially better on the
+no-face carriers but lost face identity, so it is not a universal replacement
+and is not a supported profile. Its mflux arm is the only measured native Apple
+Silicon image-regeneration path; it ran on an M5 with 32 GB but took 301-380
+seconds per image. The Google no-face outputs at 0.40 visibly redraw scene and
+object details despite better OCR metrics, so absence of faces is not a
+sufficient safety gate. The mflux result proves technical feasibility rather
+than a usable fallback; it still lacks one Google boundary, a lower safe
+operating point, and broad content-fidelity validation. Automatic text
+restorers also remain research-only:
 fresh-font and silhouette variants visibly changed typography. The higher-fidelity
 `vae-glyphs` route is available only as an experimental opt-in with verified strings
 and line geometry. It builds its donor internally but still requires an independently

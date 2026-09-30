@@ -712,3 +712,102 @@ configuration, since `qwen-zimage` includes its source-based face stage and
 klein ran global-only; the CJK loss is not. Outputs, reports and
 oracle records: `.local-eval/flux2-klein-2026-09-27/`.
 
+## Z-Image-Turbo as a global stage (2026-09-29)
+
+Verdict: **do not replace `qwen-zimage` with Z-Image-Turbo globally**. It is a
+promising research direction at the lower OpenAI no-face operating point, but
+it is not ready as a general no-face complement: the Google 0.40 outputs have
+visible non-face defects. A face detector alone is not a sufficient safety
+gate. The narrower route needs a completed Google boundary and a broader
+content-fidelity study before it can ship. **Decision: do not integrate it; keep
+the harness and measurements as research evidence only.** This decision is
+limited to a new global or mflux profile. It does not remove or change the
+existing source-conditioned Z-Image face-repair stage shared by
+`qwen-zimage`, `sdxl-zimage`, and `chroma-zimage`.
+
+The package already uses `Tongyi-MAI/Z-Image-Turbo` through DiffSynth's
+`ZImagePipeline` for source-conditioned face-crop repair after the qwen global
+stage. This experiment instead ran the same official Apache-2.0 checkpoint at
+revision `f332072aa78be7aecdf3ee76d5c247082da564a6` through diffusers 0.40.0
+`ZImageImg2ImgPipeline`. The stock diffusers path supports strength-controlled
+img2img and uses the Z-Image scheduler's static shift of 3; unlike klein
+inpainting, it does not re-inject clean source latents as reference tokens.
+Primary sources: the
+[checkpoint](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) and
+[diffusers pipeline documentation](https://huggingface.co/docs/diffusers/api/pipelines/z_image).
+
+The global-only H100 ladder used seed 0, the neutral scrub prompt, guidance
+0.0, eight effective distilled steps, and strengths 0.025, 0.05, 0.10, 0.15,
+0.20, 0.30, and 0.40 on the same seven tracked originals as the klein study.
+The real shifted start sigmas were 0.0714, 0.1364, 0.25, 0.375, 0.4286, 0.60,
+and 0.6667. The 49 generations took 264.5 seconds of inference in total,
+about 2.4 seconds per OpenAI image and 7.6 seconds per larger Google image.
+The rough Modal H100 cost was $0.29 for inference or $0.40 including the cold
+model load. Harness: `z_image_turbo_ladder.py`, kept outside this repository.
+
+The official OpenAI oracle gave first-clean strengths 0.10, 0.10, and 0.15.
+The project margin rule therefore selects 0.20, versus the shipped
+`qwen-zimage` floor of 0.15625. At those respective operating points,
+`scripts/fidelity_metrics.py` found:
+
+| Carrier | `qwen-zimage` | Z-Image-Turbo |
+| --- | --- | --- |
+| 9-face grid | ID 0.853, face LPIPS 0.054, image LPIPS 0.091 | ID 0.658, face LPIPS 0.092, image LPIPS 0.101 |
+| Typography 1 | NED 0.545, image LPIPS 0.123, PSNR 22.5 dB | NED 0.311, image LPIPS 0.086, PSNR 27.3 dB |
+| Typography 2 | NED 0.562, image LPIPS 0.116, PSNR 24.0 dB | NED 0.291, image LPIPS 0.074, PSNR 27.7 dB |
+
+Z-Image-Turbo preserves the two no-face typography cards better on every
+listed metric, but the face-grid identity loss is materially worse. That is
+enough to reject it as the universal OpenAI stage.
+
+Google bracketing is incomplete on one carrier. The party and crowd images
+were detected at 0.15 and clean at 0.20. The Cyrillic sign was detected at
+0.20 and clean at 0.30. The CJK sign remained detected through 0.15; its 0.20
+checks produced two explicit quota failures, and the remaining authenticated
+surface could not accept the prepared upload while its activity setting was
+off. Those are unreachable results, not clean verdicts. If that carrier first
+cleans at 0.20 or 0.30, the margin rule selects 0.40; if it first cleans at
+0.40, the rule selects 0.60. Consequently, 0.40 is only a provisional fidelity
+probe, not an oracle-established Google operating point.
+
+Against `qwen-zimage` at 0.35, that provisional 0.40 probe shows the same
+content split as OpenAI:
+
+| Carrier | Faces | `qwen-zimage` | Z-Image-Turbo |
+| --- | ---: | --- | --- |
+| Party scene | 5 | ID 0.933, NED 0.386, image LPIPS 0.367 | ID 0.236, NED 0.286, image LPIPS 0.326 |
+| Crowd | 18 | ID 0.752, image LPIPS 0.339 | ID 0.448, image LPIPS 0.297 |
+| Cyrillic sign | 0 | NED 0.367, LPIPS 0.424, SSIM 0.523 | NED 0.245, LPIPS 0.356, SSIM 0.547 |
+| CJK sign | 0 | NED 0.074, LPIPS 0.380, SSIM 0.555 | NED 0.000, LPIPS 0.320, SSIM 0.587 |
+
+Visual inspection agrees with the metrics. At 0.40 Z-Image-Turbo changes age,
+facial structure, and skin texture and can introduce doubled facial contours.
+The no-face images are not safe either. The CJK output has NED 0.000, but that
+only says OCR recovered the same character sequence: the model visibly redraws
+the path, foliage, lighting, sign geometry, wood grain, post, and fasteners.
+Both engines also make visible Cyrillic errors. The package's existing Z-Image
+face stage does not contradict this result. It takes an expanded crop from the
+original image, enlarges the detected face toward 768 px, runs DiffSynth at an
+adaptive strength of only 0.025-0.14, and composites only the SAM face mask into
+the already-clean global result. The global experiment instead ran diffusers at
+up to 0.40 over the full frame, where each face was small and every pixel could
+be redrawn. The face stage also does not have to remove SynthID: a matched
+isolation test found its output alone still detected, while adding it after the
+clean Qwen pass improved identity cosine from 0.589 to 0.852. It is a low-noise
+masked fidelity repair, not a watermark-removal stage.
+
+As an Apple Silicon side probe, [mflux](https://github.com/mflux-community/mflux)
+0.20.0 successfully ran img2img with
+`filipstrand/Z-Image-Turbo-mflux-4bit` on an M5 with 32 GB. At 1440x1072,
+image strength 0.8 (equivalent denoise fraction 0.20), 40 requested steps and
+eight effective steps, model load took 5.3 seconds and two deterministic runs
+took 301.5 and 380.0 seconds. The pixel outputs were identical, but there was
+no warm-run speedup. This is slow for an interactive default, but it is also the
+only measured native Apple Silicon image-regeneration path: every shipped
+invisible-image profile is CUDA-only and refuses MPS or CPU. The mflux route
+therefore proves M5 feasibility, but the visible defects at the tested Google
+strength keep it from being a usable fallback. Shipping it would require a
+lower safe operating point, the missing Google boundary, broader content
+fidelity, packaging, and product-level tests. Outputs, fidelity logs,
+manifests, and the local timing report are under
+`.local-eval/z-image-turbo-2026-09-27/`.
