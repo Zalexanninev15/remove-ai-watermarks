@@ -54,7 +54,26 @@ This page is an index. Each finding lives in its canonical page.
   process. The security-protection guide (TC260-PG-202511A) records a
   `SecurityData` JSON object, a digital signature over the label and optionally
   the content, in `ReservedCode1` and `ReservedCode2`. The library accepts those
-  fields as label evidence but does not verify the signature.
+  fields as label evidence but does not verify the signature. MiniMax is the one
+  producer in the local corpus that writes a guide-shaped object (checked
+  2026-09-29): four MiniMax videos served by Higgsfield and Runway, two of them
+  tracked (`higgsfield-hailuo-2-3.mp4`, `higgsfield-minimax-h3.mp4`), carry
+  `SecurityData` with two SM3withSM2 (`1.2.156.10197.1.501`) signatures and one
+  public key, `KeyValue` `00a0b3b0...47e4fd` in all four. The label signature
+  verifies on all four against the guide's appendix A.1 message, the ASCII string
+  `"Label":"1","ContentProducer":"MiniMax","ProduceID":"<id>"`, with the default
+  SM2 user ID `1234567812345678` and the key's x coordinate lifted to the even-y
+  point; changing one `ProduceID` digit fails it. MiniMax's own spellings depart
+  from the guide: `TBSData.Type` is `LabelMataData` (the guide's `Md`) and
+  `Binding` with `BType` `0` (its `Bnd`); the second signature verifies over the
+  compact JSON of the `Bindings` entry, also on all four. That entry's SM3
+  content hash matched neither the whole file nor the file without its label,
+  and it names no `CntSel`, so the content binding is unverified. Other producers fill the same
+  fields with opaque vendor strings (Qwen a base64 digest, Vidu 32 hex digits,
+  Wan and HappyHorse `L-`/`K-` prefixed values), not `SecurityData`. The key sits
+  in the file it signs, so a check proves authenticity only against a pinned
+  MiniMax key; verifying in `identify` needs SM2/SM3, which no current dependency
+  provides.
 - **Experiments.** Chroma restoration after regeneration (arXiv:2508.21072) was
   measured on 2026-09-27 and is not shipped: transplanted source chroma drew one
   explicit "inconclusive" and two unclear Gemini answers where the untouched
