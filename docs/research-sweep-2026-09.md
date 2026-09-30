@@ -53,8 +53,7 @@ This page is an index. Each finding lives in its canonical page.
   guide (TC260-PG-20258A) covers documents this image and video tool does not
   process. The security-protection guide (TC260-PG-202511A) records a
   `SecurityData` JSON object, a digital signature over the label and optionally
-  the content, in `ReservedCode1` and `ReservedCode2`. The library accepts those
-  fields as label evidence but does not verify the signature. MiniMax is the one
+  the content, in `ReservedCode1` and `ReservedCode2`. MiniMax is the one
   producer in the local corpus that writes a guide-shaped object (checked
   2026-09-29): four MiniMax videos served by Higgsfield and Runway, two of them
   tracked (`higgsfield-hailuo-2-3.mp4`, `higgsfield-minimax-h3.mp4`), carry
@@ -72,8 +71,8 @@ This page is an index. Each finding lives in its canonical page.
   fields with opaque vendor strings (Qwen a base64 digest, Vidu 32 hex digits,
   Wan and HappyHorse `L-`/`K-` prefixed values), not `SecurityData`. The key sits
   in the file it signs, so a check proves authenticity only against a pinned
-  MiniMax key; verifying in `identify` needs SM2/SM3, which no current dependency
-  provides.
+  MiniMax key. `identify` now verifies it with a built-in SM3/SM2 and a pinned
+  MiniMax key ([module internals](module-internals.md)).
 - **Experiments.** Chroma restoration after regeneration (arXiv:2508.21072) was
   measured on 2026-09-27 and is not shipped: transplanted source chroma drew one
   explicit "inconclusive" and two unclear Gemini answers where the untouched

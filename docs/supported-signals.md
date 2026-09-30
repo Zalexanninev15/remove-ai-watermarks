@@ -102,6 +102,11 @@ The inspection and stripping code handles signals in these groups:
   `script.onMetaData.AIGC` placements, plus the audio placements of
   TC260-PG-202510A: a RIFF `AIGC` chunk in WAV, an ID3v2 `TXXX` frame described
   `AIGC` in MP3, and an `AIGC=` Vorbis comment in OGG, Opus and FLAC;
+- TC260-PG-202511A `SecurityData` label signatures (SM3withSM2) in a label's
+  `ReservedCode1`: a signature that verifies against a pinned producer key is a
+  high-confidence `aigc_signature` signal (MiniMax is the one pinned signer), a
+  signature that does not verify is a caveat, and every result appears as the
+  `aigc_signature` metadata marker;
 - xAI and Grok signature-plus-UUID pairs in ordinary EXIF, ImageMagick PNG raw
   EXIF profiles, XMP description/creator fields, PNG Description/Author text,
   and IPTC Caption-Abstract/By-line fields;

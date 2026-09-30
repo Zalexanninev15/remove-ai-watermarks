@@ -650,6 +650,24 @@ Key contracts:
   [`_internal/isobmff.py`](../src/remove_ai_watermarks/_internal/isobmff.py).
 - Native MP4/MOV TC260 `AIGC` entries are read from
   `moov.udta.meta.keys/ilst` and blanked without changing box sizes.
+- TC260 `SecurityData` signatures are checked by
+  [`_internal/tc260_signature.py`](../src/remove_ai_watermarks/_internal/tc260_signature.py)
+  on top of a verification-only SM3/SM2 in
+  [`_internal/sm2.py`](../src/remove_ai_watermarks/_internal/sm2.py), because no
+  dependency provides the SM2 curve. The label message is the guide's appendix
+  A.1 string (`"Label":"1","ContentProducer":"...","ProduceID":"..."`) under the
+  default SM2 user ID, and MiniMax's `LabelMataData` spelling is accepted beside
+  the guide's `Md`. Only the label signature is checked: MiniMax's binding
+  signature also verifies, but no verdict reads it, and its content hash is not
+  recomputed because MiniMax names no `CntSel`. The key travels in the file, so
+  only a key pinned in `TC260_SIGNING_KEYS` names a signer, and a pinned signer
+  is checked with the pinned point whatever parity the file claims; an unpinned
+  key that verifies proves integrity only and adds no signal. `ReservedCode2`,
+  the propagator's slot, is not read because no sample fills it. Verifications
+  are memoized, since `get_ai_metadata` and the verdict check the same label.
+  `tests/test_sm2.py` pins the GB/T 32905 SM3 vectors, OpenSSL's SM2 verify
+  vectors, and the real MiniMax signatures. Over 411 local images and videos the
+  only verdict-record change was the added marker on the nine MiniMax videos.
 - Native MP4/MOV `workflow` and `prompt` entries use that keyed metadata-list
   reader and the same offset-preserving removal path.
 - Native MKV/WebM TC260 `AIGC` entries are read from

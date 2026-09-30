@@ -49,6 +49,7 @@ from remove_ai_watermarks._internal.constants import (
     C2PA_SIGNER_PLATFORMS,
 )
 from remove_ai_watermarks._internal.schema import require_schema_version
+from remove_ai_watermarks._internal.tc260_signature import check_tc260_signature
 from remove_ai_watermarks.metadata import (
     AI_METADATA_KEYS,
     AIGC_MARKERS,
@@ -158,6 +159,10 @@ _HF_JOB_CAVEAT = (
     "it serves, for its own and hosted third-party models) but names no model, so it is a "
     "medium-confidence signal. Higgsfield adds the tag after signing, which invalidates any "
     "C2PA manifest the upstream model embedded."
+)
+_TC260_SIGNATURE_FAILED_CAVEAT = (
+    "The TC260 label carries a SecurityData signature that does not verify against its own "
+    "fields, so the label was altered after signing or copied from another file."
 )
 _C2PA_CLOUD_CAVEAT = (
     "The embedded C2PA manifest is absent but an XMP provenance pointer to the "
@@ -1486,6 +1491,11 @@ def _identify_from_evidence(
             platform = "China AIGC-labeled content (TC260 standard)"
         if manufacturer := _tc260_manufacturer_of(producer):
             ai_vendor_claims["aigc"] = manufacturer
+        if aigc_data and (signature := check_tc260_signature(aigc_data)):
+            if signature.label == "verified" and signature.signer:
+                signals.append(Signal("aigc_signature", signature.describe(), "high"))
+            elif signature.label == "failed":
+                caveats.append(_TC260_SIGNATURE_FAILED_CAVEAT)
 
     # ── Local diffusion parameters (Stable Diffusion / ComfyUI) ──────
     local_keys = sorted(k for k in meta if k.lower() in _LOCAL_GEN_KEYS)

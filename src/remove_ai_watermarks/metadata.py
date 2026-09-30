@@ -1424,6 +1424,10 @@ def get_ai_metadata(image_path: Path) -> dict[str, str]:
         # sentence above, whose wording can change without notice.
         if producer:
             result["aigc_producer"] = producer
+        from remove_ai_watermarks._internal.tc260_signature import check_tc260_signature
+
+        if signature := check_tc260_signature(aigc):
+            result["aigc_signature"] = signature.describe()
 
     app_scan = scan_head(image_path)
     app_provenance, app_generator = _app_metadata_evidence(app_scan)
