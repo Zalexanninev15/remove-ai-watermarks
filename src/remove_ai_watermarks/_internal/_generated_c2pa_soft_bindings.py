@@ -1,7 +1,7 @@
 """Generated C2PA soft-binding registry; do not edit by hand.
 
 Source: https://raw.githubusercontent.com/c2pa-org/softbinding-algorithm-list/main/softbinding-algorithm-list.json
-Revision: 1b3ef637890ea8228bca13d8941cfd54da941867
+Revision: d36d1c1742b1753ca064bb3307abfd95db912a28
 Source license: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: validated, ordered, and reduced to fields used at runtime; descriptions
 are shortened to their first sentence for display.
@@ -12,7 +12,7 @@ from __future__ import annotations
 C2PA_SOFT_BINDING_SOURCE_URL = (
     "https://raw.githubusercontent.com/c2pa-org/softbinding-algorithm-list/main/softbinding-algorithm-list.json"
 )
-C2PA_SOFT_BINDING_SOURCE_REVISION = "1b3ef637890ea8228bca13d8941cfd54da941867"
+C2PA_SOFT_BINDING_SOURCE_REVISION = "d36d1c1742b1753ca064bb3307abfd95db912a28"
 C2PA_SOFT_BINDING_SOURCE_LICENSE = "CC BY 4.0"
 
 C2PA_SOFT_BINDING_ROWS: tuple[
@@ -575,7 +575,7 @@ C2PA_SOFT_BINDING_ROWS: tuple[
         49,
         "com.museblossom.contentsdefence.1",
         "watermark",
-        ("image",),
+        ("audio", "image", "video"),
         (),
         (
             "Contents Defence invisible image watermark, used to recover the associated C2PA "
