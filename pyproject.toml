@@ -59,7 +59,7 @@ dependencies = [
     # synthetic/partial blobs the validator rejects. Binary wheel (Rust), but the
     # import is light (no torch/numpy) so it fits the dependency-light identify
     # host. Prebuilt wheels cover the full CI matrix (linux/macos/windows).
-    "c2pa-python>=0.35.0",
+    "c2pa-python>=0.38.0",
 ]
 
 [project.optional-dependencies]
@@ -104,9 +104,11 @@ diffusion = [
     # 5.x but the tokenizers *release candidate* (0.23.0rc0) that the global
     # ``prerelease = "allow"`` drags in: its CLIP tokenizer raises
     # ``RobertaProcessing.__new__() got an unexpected keyword argument 'cls'``.
-    # Cap tokenizers to the stable 0.22 line (transformers 5.x accepts
-    # >=0.22,<=0.23.0) so the rc is excluded while SDXL still loads.
-    "transformers>=5,<6",
+    # Cap tokenizers to the verified stable 0.22 line so the rc is excluded
+    # while SDXL still loads.
+    # Transformers 5.16+ requires tokenizers 0.23.1+, outside the verified
+    # stable tokenizer line below. Keep the published extras jointly resolvable.
+    "transformers>=5,<5.16",
     "tokenizers>=0.22,<0.23",
     "accelerate>=0.25.0",
     "safetensors",
@@ -131,10 +133,11 @@ text-restoration = [
 # Draft-only OCR proposals for verified-text manifests. CPU, no torch:
 # PaddleOCR detection plus three script-chosen recognition engines. The models
 # download on first use and are cached by huggingface_hub; never bundled.
+# Keep every Hub extra below 2 so it remains composable with Diffusers (<2).
 text-draft = [
     "paddleocr>=3.3.3",
     "paddlepaddle>=3.0.0",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<2",
 ]
 # Adobe TrustMark decoder -- the open, keyless watermark behind Adobe Durable
 # Content Credentials (soft-binding alg ``com.adobe.trustmark.P``). Optional
@@ -150,9 +153,9 @@ trustmark = [
 classify = [
     "remove-ai-watermarks[pixels]",
     "torch>=2.0.0",
-    "transformers>=5,<6",
+    "transformers>=5,<5.16",
     "tokenizers>=0.22,<0.23",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<2",
 ]
 # Optional vision-only CPU runtime for the photo classifier. Keep it separate
 # because PyTorch remains the default and ONNX Runtime is needed only on opt-in.
@@ -165,7 +168,7 @@ classify-onnx = [
 # SynthID detector. Weights download on first use.
 source-classify = [
     "remove-ai-watermarks[pixels]",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<2",
 ]
 # Universal region eraser backend -- big-LaMa via onnxruntime (Carve/LaMa-ONNX,
 # Apache-2.0). CPU, no torch. Model (~200 MB) is downloaded on first use and
@@ -174,7 +177,7 @@ source-classify = [
 lama = [
     "remove-ai-watermarks[visible]",
     "onnxruntime>=1.24.0",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<2",
 ]
 # Lightweight inpaint backend -- MI-GAN via onnxruntime (andraniksargsyan/migan,
 # MIT). CPU, no torch. Model (~28 MB) downloaded on first use and cached by
@@ -184,7 +187,7 @@ lama = [
 migan = [
     "remove-ai-watermarks[visible]",
     "onnxruntime>=1.24.0",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<2",
 ]
 dev = [
     "remove-ai-watermarks[video]",
@@ -196,7 +199,7 @@ dev = [
     # scripts/audioseal_experiment.py provenance study. Not part of the
     # installed CLI, the public Python API, or any runtime pipeline.
     "audioseal>=0.2.0",
-    "huggingface-hub>=0.20.0",
+    "huggingface-hub>=0.20.0,<2",
     # Direct Microsoft Content Provenance API transport. The adapter uses an
     # Azure CLI Entra token and ignores process proxy settings.
     "httpx>=0.28,<1",

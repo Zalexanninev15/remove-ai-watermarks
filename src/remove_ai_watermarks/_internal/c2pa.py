@@ -35,13 +35,28 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import BinaryIO
 
+_C2paContext: Any = None
 _C2paReader: Any = None
 _C2paError: Any = None
 with contextlib.suppress(Exception):
     from c2pa import C2paError as _C2paError  # pyright: ignore[reportMissingTypeStubs]
+    from c2pa import Context as _C2paContext  # pyright: ignore[reportMissingTypeStubs]
     from c2pa import Reader as _C2paReader  # pyright: ignore[reportMissingTypeStubs]
 
-_C2PA_READER_AVAILABLE = _C2paReader is not None
+_C2PA_READER_AVAILABLE = _C2paReader is not None and _C2paContext is not None
+# Preserve the SDK's bundled certificate profile explicitly: c2pa-rs 0.91.0
+# clears its default EKUs when applying empty trust settings. No trust anchors
+# or certificate allowlist are installed. See docs/module-internals.md, C2PA.
+_C2PA_ALLOWED_EKUS = "\n".join(
+    (
+        "1.3.6.1.5.5.7.3.4",  # email protection
+        "1.3.6.1.5.5.7.3.36",  # document signing
+        "1.3.6.1.5.5.7.3.8",  # timestamping
+        "1.3.6.1.5.5.7.3.9",  # OCSP signing
+        "1.3.6.1.4.1.311.76.59.1.9",  # Microsoft C2PA signing
+        "1.3.6.1.4.1.62558.2.1",  # C2PA signing
+    )
+)
 _PNG_HEADER = struct.Struct(">I4s")
 
 _CONTENT_BINDING_MATCHES = (
@@ -101,28 +116,30 @@ def _manifest_json_uncached(path: str, *, strict: bool = False) -> str | None:
     byte scan and can lose a high-confidence signal. The log line preserves the
     diagnostic context needed to investigate an intermittent reader failure.
     """
-    try:
-        reader = _C2paReader.try_create(path)
-    except _C2paError.NotSupported as error:
-        logger.debug("C2PA reader does not support %s: %s", path, error)
-        return None
-    except Exception as error:
-        logger.warning("C2PA reader failed to open %s: %s: %s", path, type(error).__name__, error)
-        if strict:
-            raise
-        return None
-    if reader is None:
-        return None
-    try:
-        with reader:
-            return cast("str", reader.json())
-    except Exception as error:
-        # The reader opened the file, so a manifest is there; failing to serialize it
-        # is never routine.
-        logger.warning("C2PA reader could not serialize %s: %s: %s", path, type(error).__name__, error)
-        if strict:
-            raise
-        return None
+    with contextlib.ExitStack() as resources:
+        try:
+            context = resources.enter_context(_C2paContext.from_dict({"trust": {"trust_config": _C2PA_ALLOWED_EKUS}}))
+            reader = _C2paReader.try_create(path, context=context)
+        except _C2paError.NotSupported as error:
+            logger.debug("C2PA reader does not support %s: %s", path, error)
+            return None
+        except Exception as error:
+            logger.warning("C2PA reader failed to open %s: %s: %s", path, type(error).__name__, error)
+            if strict:
+                raise
+            return None
+        if reader is None:
+            return None
+        try:
+            with reader:
+                return cast("str", reader.json())
+        except Exception as error:
+            # The reader opened the file, so a manifest is there; failing to serialize it
+            # is never routine.
+            logger.warning("C2PA reader could not serialize %s: %s: %s", path, type(error).__name__, error)
+            if strict:
+                raise
+            return None
 
 
 @functools.lru_cache(maxsize=8)

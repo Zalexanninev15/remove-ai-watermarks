@@ -507,6 +507,50 @@ Regression coverage:
 official `c2pa-python` reader first. Its byte-level PNG parser remains a fallback
 for partial and synthetic fixtures that the official reader rejects.
 
+Each read owns a `Context` with the six EKUs from the SDK's
+[bundled certificate profile](https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.91.0/sdk/src/crypto/cose/valid_eku_oids.cfg).
+This sets permitted certificate purposes, not trusted signer identities. It
+adds neither trust anchors nor a certificate allowlist and leaves signature,
+asset-binding, and certificate verification enabled. The context outlives the
+reader and JSON serialization, then both native resources close.
+
+The 2026-09-30 upgrade from c2pa-python 0.37.10 to 0.38.0 exposed a default-profile
+regression in Rust SDK 0.91.0:
+[`Store::from_context`](https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.91.0/sdk/src/store.rs)
+now calls `ctp.clear()`, which clears EKUs as well as trust anchors, while
+production `Trust::default()` supplies no replacement `trust_config`.
+[SDK 0.90.19](https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.19/sdk/src/store.rs)
+kept the bundled profile. This produced `signingCredential.invalid` despite
+valid signatures and asset hashes on `higgsfield-gpt-image.jpg`, the Bing,
+InvisMark, and Paint Microsoft provenance fixtures, and the Microsoft visible
+provider original. Their leaf certificates contain the C2PA/document-signing
+or Microsoft C2PA-signing EKUs that were cleared. Explicit per-reader settings
+restore the previous acceptance policy; the signers remain `untrusted`.
+`test_c2pa_signing_ekus_validate_without_trusting_the_signer` exercises all five
+through the real reader, then replaces the permitted EKUs with an unrelated OID
+and requires credential rejection with intact signature and asset hash. Removing
+the context from the reader call makes all five positive cases fail.
+
+Microsoft's same fixtures also report `claim.malformed` under the newer SDK.
+Their soft-binding block stores a GUID as a text string, whereas
+[C2PA 2.4, section 18.10](https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html#soft_binding_assertion)
+requires a CBOR byte string. The newer
+[`SoftBindingBlock`](https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.91.0/sdk/src/assertions/soft_binding.rs)
+uses bytes instead of the older SDK's `String`. Keep this failure in the
+validation codes and retain the raw signed assertion for marker inventory.
+A readable algorithm/GUID declaration does not establish schema validity or
+prove a pixel watermark. This does not bypass credential failures, and the
+asset-binding and signature dimensions remain independent of assertion schema
+validation.
+
+The before/after metadata-only comparison for that upgrade preserved origin,
+platform, confidence, source kind, and all four validation dimensions across
+the retained corpus, with unchanged input hashes. SDK JSON and diagnostic codes
+changed: Microsoft gained the malformed-assertion status, other files gained
+OCSP-skipped or BMFF-exclusion notices, and some existing hash failures were
+reported twice. These diagnostics remain visible; report bytes are not identical.
+The comparison did not exercise pixel detection, removal, or GPU inference.
+
 Structured extraction is limited to the active manifest and the ingredient
 manifests reachable from it. Validation is preserved as separate dimensions:
 asset binding integrity, claim signature, signer trust, and signer certificate

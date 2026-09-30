@@ -61,6 +61,34 @@ Python-dependent branches, so apply separate constraints on either side of
 Python 3.13. A blanket upgrade can both cross a NumPy major and downgrade a
 neighboring OCR package to satisfy the new graph.
 
+### Dependency compatibility bounds
+
+The published extras and Dependabot configuration carry matching bounds:
+
+- Transformers stays below 5.16 while tokenizers stays on the verified 0.22
+  line. [PyPI metadata for Transformers 5.16](https://pypi.org/pypi/transformers/5.16.0/json)
+  and [5.17](https://pypi.org/pypi/transformers/5.17.0/json) requires tokenizers
+  `>=0.23.1,<0.24`, so updating Transformers alone cannot resolve. Revalidate
+  tokenizer construction and the model-loading paths before lifting both bounds.
+- Hugging Face Hub stays below 2 in every extra that names it. Diffusers 0.40
+  [requires `huggingface-hub>=1.23,<2`](https://pypi.org/pypi/diffusers/0.40.0/json);
+  a Hub-only extra must remain composable with the diffusion extra. Recheck
+  Diffusers' declared requirements before lifting the Hub bound.
+- C2PA requires 0.38.0 or newer and uses an explicit per-reader certificate
+  profile. Its Rust SDK 0.91.0 clears the bundled EKUs when loading empty trust
+  settings, which otherwise rejects the OpenAI and Microsoft signing
+  certificates in five committed fixtures. The profile restores those EKUs
+  without installing trust anchors or bypassing certificate validation.
+  Cause, upstream sources, and regression guards are in
+  [Module internals, C2PA](module-internals.md#c2pa). Recheck both positive
+  certificate acceptance and negative credential, signature, and asset-binding
+  validation when upgrading the reader; retain every SDK validation status.
+
+Dependabot ignore entries mirror these compatibility bounds. Its failed
+2026-09-30 run named the active Python 3.11 interpreter in a generic resolver
+hint, but the actual conflicts were the tokenizer and Hub requirements above;
+reducing the supported Python range does not fix them.
+
 ## CI
 
 `.github/workflows/test.yml` runs Ruff, a test matrix over every supported Python

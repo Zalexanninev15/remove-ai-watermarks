@@ -225,7 +225,7 @@ def test_c2pa_reader_failure_is_partial_even_after_tolerant_cached_read(tmp_path
 
     class BrokenReader:
         @staticmethod
-        def try_create(path):
+        def try_create(path, *, context):
             calls.append(path)
             if not serialization_failure:
                 raise RuntimeError("synthetic C2PA open failure")
@@ -265,3 +265,46 @@ def test_exif_parser_failure_is_partial(tmp_path, monkeypatch):
     assert calls
     assert record["status"] == "partial"
     assert record["issues"] == [{"stage": "decoder", "code": "collection-failed"}]
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "provenance/higgsfield-gpt-image.jpg",
+        "provenance/microsoft-bing-image-creator.jpg",
+        "provenance/microsoft-invismark.png",
+        "provenance/microsoft-paint-invismark.png",
+        "visible/microsoft/provider-original.png",
+    ],
+)
+def test_c2pa_signing_ekus_validate_without_trusting_the_signer(relative_path, monkeypatch):
+    from remove_ai_watermarks._internal import c2pa
+
+    source = Path(__file__).resolve().parents[1] / "data" / "fixtures" / relative_path
+    c2pa._manifest_json_cached.cache_clear()
+    c2pa._extract_c2pa_info_cached.cache_clear()
+    info = c2pa.extract_c2pa_info(source)
+    assert info["c2pa_integrity"] == info["c2pa_signature"] == "valid"
+    assert info["c2pa_signer_validity"] != "invalid"
+    assert info["c2pa_signer_trust"] == "untrusted"
+    assert "signingCredential.invalid" not in info["c2pa_validation_codes"]
+    report = identify(source, check_visible=False, check_invisible=False)
+    assert report.confidence == "high"
+    assert report.platform is not None
+    if "microsoft" in relative_path:
+        assert "claim.malformed" in info["c2pa_validation_codes"]
+        assert "com.microsoft.invismark.1" in info["soft_binding_algorithm"]
+
+    # Exercise the real reader with an unrelated EKU, not a mocked validation result.
+    monkeypatch.setattr(c2pa, "_C2PA_ALLOWED_EKUS", "1.2.3.4.5.99999")
+    c2pa._manifest_json_cached.cache_clear()
+    c2pa._extract_c2pa_info_cached.cache_clear()
+    try:
+        rejected = c2pa.extract_c2pa_info(source)
+        assert rejected["c2pa_integrity"] == rejected["c2pa_signature"] == "valid"
+        assert rejected["c2pa_signer_validity"] == "invalid"
+        assert "signingCredential.invalid" in rejected["c2pa_validation_codes"]
+        assert identify(source, check_visible=False, check_invisible=False).platform is None
+    finally:
+        c2pa._manifest_json_cached.cache_clear()
+        c2pa._extract_c2pa_info_cached.cache_clear()
