@@ -49,6 +49,7 @@ from remove_ai_watermarks._internal.constants import (
     C2PA_SIGNER_PLATFORMS,
 )
 from remove_ai_watermarks._internal.schema import require_schema_version
+from remove_ai_watermarks._internal.tc260_producers import producer_for_code, producer_for_signer
 from remove_ai_watermarks._internal.tc260_signature import check_tc260_signature
 from remove_ai_watermarks.metadata import (
     AI_METADATA_KEYS,
@@ -129,8 +130,9 @@ _SYNTHID_CAVEAT = (
 _GOOGLE_PHOTOS_EDIT = "Google Photos (AI edit)"
 _GOOGLE_PHOTOS_SYNTHID_CAVEAT = (
     "SynthID on a Google Photos AI edit rests on measurement, not on the manifest: Google's checker "
-    "found it on every Photos AI edit tested (Ask, eraser and two other edits, 2026-09-25), but Google "
-    "notes a very small edit may not carry it. Confirm via the Gemini app."
+    "found it on four edits on 2026-09-25 and on large eraser and restyle edits on 2026-10-01 UTC, "
+    "but returned indeterminate results for two small edits. This provenance inference does not "
+    "confirm a detectable pixel watermark on this file. Confirm via the Gemini app."
 )
 _C2PA_UNTRUSTED_CAVEAT = (
     "The C2PA claim signature and asset binding validate, but no trust anchor list is configured here, "
@@ -920,17 +922,6 @@ _C2PA_MANIFEST_SOURCE = "c2pa_manifest"
 _CLASH_SOURCE: dict[str, str] = {"c2pa": _C2PA_MANIFEST_SOURCE, "synthid": _C2PA_MANIFEST_SOURCE}
 
 
-def _tc260_manufacturer_of(producer: str) -> str | None:
-    """Resolve a TC260 producer to a normalized manufacturer, if registered."""
-    if not producer:
-        return None
-    from remove_ai_watermarks.metadata import uscc_of
-    from remove_ai_watermarks.watermark_registry import tc260_producer_mark
-
-    mark = tc260_producer_mark(uscc_of(producer))
-    return _vendor_of(mark.manufacturer if mark else None)
-
-
 def _integrity_clashes(
     ai_vendors: dict[str, str], camera_label: str | None, *, camera_has_ai_marker: bool
 ) -> list[str]:
@@ -1489,13 +1480,19 @@ def _identify_from_evidence(
         watermarks.append("China AIGC label (TC260 standard)")
         if platform is None:
             platform = "China AIGC-labeled content (TC260 standard)"
-        if manufacturer := _tc260_manufacturer_of(producer):
-            ai_vendor_claims["aigc"] = manufacturer
+        if tc260_producer := producer_for_code(producer):
+            ai_vendor_claims["aigc"] = tc260_producer.vendor
+            if tc260_producer.image_platform and platform == "China AIGC-labeled content (TC260 standard)":
+                platform = tc260_producer.image_platform
         if aigc_data and (signature := check_tc260_signature(aigc_data)):
             if signature.label == "verified" and signature.signer:
                 signals.append(Signal("aigc_signature", signature.describe(), "high"))
+                if signed_producer := producer_for_signer(signature.signer):
+                    ai_vendor_claims["aigc"] = signed_producer.vendor
             elif signature.label == "failed":
                 caveats.append(_TC260_SIGNATURE_FAILED_CAVEAT)
+            elif signature.label == "unsupported":
+                caveats.append(signature.describe())
 
     # ── Local diffusion parameters (Stable Diffusion / ComfyUI) ──────
     local_keys = sorted(k for k in meta if k.lower() in _LOCAL_GEN_KEYS)

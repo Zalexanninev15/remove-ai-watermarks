@@ -61,7 +61,7 @@ def visible_provenance(source: str | Path) -> frozenset[str]:
 
     Mapping: a Google/Gemini C2PA issuer -> ``"gemini"``; a ``samsung_genai`` marker ->
     ``"samsung"``; a China-AIGC (TC260) label -> the vendor its ``ContentProducer``
-    names (``KnownMark.tc260_producer_codes``). An absent or unmapped producer confirms
+    names (the shared ``TC260_PRODUCERS`` registry). An absent or unmapped producer confirms
     no particular product: the TC260 standard identifies neither a manufacturer nor a
     product.
 
@@ -96,11 +96,11 @@ def _tc260_vendors(path: Path) -> frozenset[str]:
     import contextlib
 
     with contextlib.suppress(Exception):
-        from remove_ai_watermarks.metadata import aigc_label, uscc_of
+        from remove_ai_watermarks.metadata import aigc_label
         from remove_ai_watermarks.watermark_registry import tc260_producer_mark
 
         producer = (aigc_label(path) or {}).get("ContentProducer", "")
-        if producer and (mark := tc260_producer_mark(uscc_of(producer))):
+        if producer and (mark := tc260_producer_mark(producer)):
             return frozenset({mark.key})
     return frozenset()
 

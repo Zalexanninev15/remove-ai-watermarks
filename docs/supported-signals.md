@@ -106,7 +106,10 @@ The inspection and stripping code handles signals in these groups:
   `ReservedCode1`: a signature that verifies against a pinned producer key is a
   high-confidence `aigc_signature` signal (MiniMax is the one pinned signer), a
   signature that does not verify is a caveat, and every result appears as the
-  `aigc_signature` metadata marker;
+  `aigc_signature` metadata marker. Nested JSON reserved fields are preserved;
+  Honor YOYO RSA/content signatures are reported as unsupported, with no
+  integrity or signer-trust claim. Its measured producer code attributes images
+  to Honor;
 - xAI and Grok signature-plus-UUID pairs in ordinary EXIF, ImageMagick PNG raw
   EXIF profiles, XMP description/creator fields, PNG Description/Author text,
   and IPTC Caption-Abstract/By-line fields;
@@ -198,8 +201,11 @@ its chain, as a Gemini ingredient carries; with no AI claim in the chain,
 "Google Photos (AI edit)" with SynthID present, although the Photos manifest
 records no SynthID action and Google documents the mark only for Reimagine:
 Google's checker found SynthID in all four Photos AI edits tested on 2026-09-25
-(Ask, eraser and two other edits), and a caveat says the claim rests on that
-measurement. Legacy OpenAI C2PA without that action
+(Ask, eraser and two other edits). On 2026-10-01 UTC, a large Magic Eraser edit
+and a watercolor restyle were positive, but two small `Help me edit` changes
+were indeterminate; the source and crop control were negative. A caveat keeps
+this provenance inference separate from a confirmed pixel watermark on the
+particular file. Legacy OpenAI C2PA without that action
 does not assert SynthID. GPT Image 2.5 Flare and Sunburst were verified on
 2026-09-15: both API outputs carried valid OpenAI C2PA with
 `c2pa.watermarked.unbound` and exercised the existing model-independent OpenAI
@@ -301,8 +307,9 @@ not a universal clean verdict.
 | Baidu | Baidu mark | No registered pixel decoder | TC260 AIGC |
 | LiblibAI | LiblibAI wordmark and compact pill | No registered pixel decoder | TC260 AIGC |
 | RunningHub | RunningHub mark | No registered pixel decoder | TC260 AIGC |
+| Honor YOYO AI editing | No registered AI mark; forum account overlay is separate | No registered pixel decoder | EXIF UserComment TC260 AIGC with nested RSA/content signature, reported unsupported |
 | Samsung Galaxy AI | One locale specific mark | No registered pixel decoder | C2PA and Samsung markers |
-| Google Photos AI edits | None | SynthID, reported present: Google's checker found it in 4 of 4 Photos AI edits (2026-09-25), though the manifest records no SynthID action | C2PA signed "Google Photos" with a `compositeWithTrainedAlgorithmicMedia` action, plus XMP `photoshop:Credit` `Edited with Google AI` |
+| Google Photos AI edits | None | SynthID provenance inference: 4/4 earlier edits positive (2026-09-25); large eraser and restyle positive, two small edits indeterminate (2026-10-01 UTC). No SynthID action in the manifest | C2PA signed "Google Photos" with a `compositeWithTrainedAlgorithmicMedia` action, plus XMP `photoshop:Credit` `Edited with Google AI` |
 | Apple Image Playground and Photos Clean Up | None | No registered pixel decoder; SynthID announced by Apple for a later update | XMP `photoshop:Credit` (`Apple Image Playground`, `Apple Photos Generative Edit: Clean Up`) plus IPTC digitalSourceType; no C2PA on measured 2026-09 output |
 
 For detector thresholds, measured limits, and incident history, see

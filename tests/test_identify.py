@@ -30,7 +30,6 @@ from remove_ai_watermarks.identify import (
     _attribute_platform,
     _integrity_clashes,
     _issuers_in,
-    _tc260_manufacturer_of,
     _vendor_of,
     evidence_from_metadata_record,
     extract_provenance_evidence,
@@ -1870,9 +1869,13 @@ class TestVendorOf:
 
 class TestIntegrityClashesHelper:
     def test_tc260_manufacturer_comes_from_the_registered_producer(self):
-        assert _tc260_manufacturer_of("001191440101MA9Y9T4H7A00001") == "Alibaba"
-        assert _tc260_manufacturer_of("0011999999999999999999999") is None
-        assert _tc260_manufacturer_of("") is None
+        from remove_ai_watermarks._internal.tc260_producers import producer_for_code
+
+        row = producer_for_code("001191440101MA9Y9T4H7A00001")
+        assert row is not None
+        assert row.vendor == "Alibaba"
+        assert producer_for_code("0011999999999999999999999") is None
+        assert producer_for_code("") is None
 
     def test_two_ai_vendors_clash(self):
         clashes = _integrity_clashes({"c2pa": "OpenAI", "exif_generator": "Ideogram"}, None, camera_has_ai_marker=True)
@@ -2352,6 +2355,8 @@ class TestGooglePhotosSynthIdScope:
 
     Google documents SynthID only for Reimagine (blog.google, 2025-08-20), but its
     checker found the mark on all four Photos AI edits tested on 2026-09-25.
+    On 2026-10-01 UTC, large eraser and restyle edits were positive, while two
+    small edits were indeterminate. The report remains a provenance inference.
 
     The manifest shape mirrors a real Google Photos iOS object-removal edit captured
     2026-09-23: signer common name "Google Photos", actions opened + deleted, the

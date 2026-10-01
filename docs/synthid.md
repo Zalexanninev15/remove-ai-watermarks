@@ -666,6 +666,17 @@ with their metadata stripped, found SynthID in all four on 2026-09-25: an Ask
 edit, an eraser edit and two other AI edits. The tool therefore reports SynthID
 as present for a Photos-signed AI edit and adds a caveat that the claim rests on
 that measurement, since Google notes a very small edit may not carry the mark.
+An independent six-file check on 2026-10-01 UTC used one landscape source and
+five iOS copies captured on 2026-09-30. The prepared uploads retained identical
+decoded pixels and stripped AI provenance metadata. Large Magic Eraser and
+watercolor restyle edits were positive; small object removal and recoloring
+through `Help me edit` were indeterminate, with the checker noting a possibly
+too-small edit. The unchanged source and square crop control were negative.
+The four AI exports all carried Google Photos C2PA before stripping, so that
+manifest shape does not distinguish a detectable watermark from an inconclusive
+small edit. Indeterminate is not evidence of absence. Each operation has one
+export, with no repetitions; a genuinely small Magic Eraser mask remains untested.
+Private files and hash-bound oracle records remain outside the public repository.
 The Google Photos web editor is outside that rule: it has no generative tool and
 writes no Content Credentials, and Enhance, Sky and crop edits made there carried
 no SynthID in the same checker (2026-09-26,
@@ -692,7 +703,8 @@ statements to "every Photos AI edit" is this project's inference, not Google's:
   "Edited with AI tools" appears on edits "with generative AI like Magic Eraser
   where new pixels are created", and an original without Content Credentials gets
   them "when an AI edit is saved". No Google page states whether Magic Eraser
-  applies SynthID; the eraser capture above is the only evidence here.
+  applies SynthID; the earlier eraser capture and the large eraser check above
+  are the measured evidence here.
 - The checker's own caveat ([Gemini Apps Help](https://support.google.com/gemini/answer/16722517)):
   "Likely too small an edit" (minor alterations might not carry a detectable
   watermark).

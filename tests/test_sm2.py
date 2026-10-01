@@ -177,12 +177,14 @@ class TestTc260Signature:
         assert check_tc260_signature({"Label": "1", "ReservedCode1": reserved}) is None
 
 
-def _labeled_png(path: Path, label: dict[str, str]) -> Path:
+def _labeled_png(path: Path, label: dict[str, str], text: dict[str, str] | None = None) -> Path:
     from PIL import Image
     from PIL.PngImagePlugin import PngInfo
 
     info = PngInfo()
     info.add_text("AIGC", json.dumps(label, separators=(",", ":")))
+    for key, value in (text or {}).items():
+        info.add_text(key, value)
     Image.new("RGB", (64, 64), (90, 120, 150)).save(path, pnginfo=info)
     return path
 
@@ -199,6 +201,25 @@ class TestIdentifyIntegration:
             ("TC260 label signature verified (pinned MiniMax key)", "high")
         ]
         assert not any("does not verify" in caveat for caveat in report.caveats)
+
+    def test_pinned_signer_supplies_vendor_when_the_producer_lookup_is_unavailable(self, tmp_path, monkeypatch):
+        import remove_ai_watermarks.identify as identification
+
+        path = _labeled_png(
+            tmp_path / "mixed.png",
+            _minimax_label(),
+            {"XML:com.adobe.xmp": "<x:Iptc4xmpExt:AISystemUsed>OpenAI</x:Iptc4xmpExt:AISystemUsed>"},
+        )
+        monkeypatch.setattr(identification, "producer_for_code", lambda code: None)
+        report = identification.identify(path, check_visible=False, check_invisible=False)
+        assert any(s.name == "aigc_signature" for s in report.signals)
+        assert any("MiniMax" in clash and "OpenAI" in clash for clash in report.integrity_clashes)
+
+        # The same real signature under its embedded key cannot name a vendor.
+        monkeypatch.setattr(tc260_signature, "TC260_SIGNING_KEYS", {})
+        unpinned = identification.identify(path, check_visible=False, check_invisible=False)
+        assert not any(s.name == "aigc_signature" for s in unpinned.signals)
+        assert not unpinned.integrity_clashes
 
     def test_a_failed_signature_is_a_caveat_not_a_signal(self, tmp_path: Path) -> None:
         from remove_ai_watermarks.identify import identify

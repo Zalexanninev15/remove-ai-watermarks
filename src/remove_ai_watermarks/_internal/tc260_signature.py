@@ -3,10 +3,10 @@
 The guide lets a label producer record a ``SecurityData`` JSON object in the
 label's ``ReservedCode1``: SM3withSM2 signatures (``PubSD`` entries of type
 ``DS``), the public key (``PubKey``), and content bindings (``Bindings``). Only
-the producer side is read here, because that is the only shape measured: MiniMax
-writes it on every video in the local corpus, and ``ReservedCode2`` (the
-propagator's slot) was empty on all of them. Other producers fill the reserved
-fields with opaque vendor strings that are not ``SecurityData``.
+the producer side is read here. MiniMax writes it on every video in the local
+corpus. Honor YOYO JPEGs carry nested RSA/content signatures with ``PubSd``
+spelling in both reserved slots; those signatures are reported as unsupported.
+Other measured producers use opaque vendor strings rather than ``SecurityData``.
 
 Only the label signature is checked. MiniMax spells its type ``LabelMataData``
 where the guide says ``Md``; both are accepted. MiniMax's second signature, over
@@ -25,11 +25,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from remove_ai_watermarks._internal import sm2
+from remove_ai_watermarks._internal.tc260_producers import TC260_PRODUCERS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-Status = Literal["verified", "failed", "absent"]
+Status = Literal["verified", "failed", "absent", "unsupported"]
 
 SM3_WITH_SM2 = "1.2.156.10197.1.501"
 
@@ -41,12 +42,11 @@ def _pinned(x: int) -> sm2.Point:
     return point
 
 
-# Label-signing keys pinned to the organization that holds them: the even-y point
-# over the key's x coordinate. MiniMax's is the ``KeyValue`` carried by all four
-# MiniMax videos in the local corpus (Hailuo 2.3, H3 and H3 Max, served by
-# Higgsfield and Runway, 2026-09-29), with a leading ``00``.
+# Derived from the same producer rows used by metadata and visible-mark routing.
 TC260_SIGNING_KEYS: dict[str, sm2.Point] = {
-    "MiniMax": _pinned(0xA0B3B0B6A0C9B0C89CAB328342AF4E8221EC5B40799CBE835AB4251F7B47E4FD),
+    row.signer: _pinned(row.signing_key_x)
+    for row in TC260_PRODUCERS
+    if row.signer is not None and row.signing_key_x is not None
 }
 
 _LABEL_TBS_TYPES = frozenset({"Md", "LabelMataData"})
@@ -68,6 +68,11 @@ class Tc260Signature:
             return "TC260 label signature verified with its own embedded key (no pinned signer)"
         if self.label == "failed":
             return "TC260 label signature does not verify"
+        if self.label == "unsupported":
+            return (
+                "TC260 SecurityData signature algorithm or signed-content selection "
+                "is not supported; integrity unverified"
+            )
         return "TC260 SecurityData without a label signature"
 
 
@@ -130,7 +135,7 @@ def check_tc260_signature(label: Mapping[str, str]) -> Tc260Signature | None:
     security = _object(_object(parsed).get("SecurityData"))
     if security.get("Type") != "TC260PG":
         return None
-    public = _objects(security.get("PubSD"))
+    public = _objects(security.get("PubSD", security.get("PubSd")))
     keys = {
         str(entry.get("KeyID", 0)): _candidate_keys(str(entry.get("KeyValue", "")))
         for entry in reversed(public)  # reversed: the first entry per KeyID wins
@@ -138,11 +143,13 @@ def check_tc260_signature(label: Mapping[str, str]) -> Tc260Signature | None:
     }
     message = _label_message(label)
     results: list[bool] = []
+    unsupported = False
     signer: str | None = None
     for entry in public:
-        if entry.get("Type") != "DS" or entry.get("AlgID") != SM3_WITH_SM2:
+        if entry.get("Type") != "DS":
             continue
-        if _object(entry.get("TBSData")).get("Type") not in _LABEL_TBS_TYPES:
+        if entry.get("AlgID") != SM3_WITH_SM2 or _object(entry.get("TBSData")).get("Type") not in _LABEL_TBS_TYPES:
+            unsupported = True
             continue
         points, key_signer = keys.get(str(entry.get("KeyID", 0)), ([], None))
         try:
@@ -153,5 +160,6 @@ def check_tc260_signature(label: Mapping[str, str]) -> Tc260Signature | None:
         results.append(verified)
         if verified:
             signer = signer or key_signer
-    status: Status = "absent" if not results else ("verified" if any(results) else "failed")
-    return Tc260Signature(label=status, signer=signer)
+    if results:
+        return Tc260Signature(label="verified" if any(results) else "failed", signer=signer)
+    return Tc260Signature(label="unsupported" if unsupported else "absent", signer=None)

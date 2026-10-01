@@ -14,6 +14,8 @@ import re
 import struct
 from typing import TYPE_CHECKING, Any, cast
 
+from remove_ai_watermarks._internal.tc260_producers import uscc_of as uscc_of
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path
@@ -177,19 +179,14 @@ _TC260_CANONICAL_FIELDS: dict[str, str] = {field.casefold(): field for field in 
 MAX_TC260_VALUE_BYTES = 1024 * 1024
 
 
-# A TC260 producer code is ``001`` + ``1`` + USCC(18) + a 5-digit app/product suffix,
-# so two codes sharing the USCC are the same legal entity registering different
-# products. Slicing is defensive: anything not matching the layout is returned as-is,
-# which also passes through the bare-name forms some generators write ("doubao",
-# "picwish").
-_USCC_START, _USCC_END = 4, 22
-
-
-def uscc_of(code: str) -> str:
-    """The 18-char Unified Social Credit Code embedded in a TC260 producer code."""
-    if len(code) >= _USCC_END and code[:3] == "001":
-        return code[_USCC_START:_USCC_END]
-    return code
+def _tc260_fields(parsed: dict[object, object]) -> dict[str, str]:
+    """Keep structured reserved fields as JSON rather than Python repr strings."""
+    return {
+        _TC260_CANONICAL_FIELDS.get(str(key).casefold(), str(key)): (
+            json.dumps(item, ensure_ascii=False, separators=(",", ":")) if isinstance(item, (dict, list)) else str(item)
+        )
+        for key, item in parsed.items()
+    }
 
 
 def parse_tc260_aigc_json(value: bytes) -> dict[str, str] | None:
@@ -202,10 +199,7 @@ def parse_tc260_aigc_json(value: bytes) -> dict[str, str] | None:
         return None
     if not isinstance(parsed, dict):
         return None
-    fields = {
-        _TC260_CANONICAL_FIELDS.get(str(key).casefold(), str(key)): str(item)
-        for key, item in cast("dict[object, object]", parsed).items()
-    }
+    fields = _tc260_fields(cast("dict[object, object]", parsed))
     return fields if TC260_AIGC_FIELDS & fields.keys() else None
 
 
@@ -553,7 +547,7 @@ def aigc_label_from_metadata(data: bytes, candidates: tuple[str, ...] = ()) -> d
             return None
         if not isinstance(parsed, dict):
             return None
-        return {str(k): str(v) for k, v in cast("dict[object, object]", parsed).items()}
+        return _tc260_fields(cast("dict[object, object]", parsed))
 
     for candidate in candidates:
         if result := _parse(candidate, require_tc260_field=True):

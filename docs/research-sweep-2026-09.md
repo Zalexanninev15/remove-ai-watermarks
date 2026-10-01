@@ -25,7 +25,7 @@ This page is an index. Each finding lives in its canonical page.
 | Video labels | Sora discontinued; opening-only labels no longer filled over the whole clip; any video mark vetoed by another vendor's C2PA AI claim, Kling also by a non-Kling TC260 producer; TC260 video producers named | [supported-signals.md](supported-signals.md), [known-limitations.md](known-limitations.md) |
 | Apple | Image Playground and Photos Clean Up credits attributed | [supported-signals.md](supported-signals.md) |
 | New visible marks | `vidu` video mark and `wan` image mark, each calibrated on one real export | [supported-signals.md](supported-signals.md), [known-limitations.md](known-limitations.md) |
-| Google Photos | AI edits reported as "Google Photos (AI edit)" rather than Gemini, with SynthID present: Google's checker found it in 4 of 4 Photos AI edits (Ask, eraser and two others) | [synthid.md](synthid.md), [supported-signals.md](supported-signals.md) |
+| Google Photos | AI edits attributed to "Google Photos (AI edit)". Four earlier edits and two later large edits were SynthID-positive; two later small edits were indeterminate. Presence inferred from provenance needs file-specific confirmation | [synthid.md](synthid.md), [supported-signals.md](supported-signals.md) |
 | YouTube | Upload test: C2PA-driven "Made with AI" label, public streams without C2PA, Studio downloads re-signed by YouTube; re-encoded non-Google video no longer read as Google AI with SynthID | [supported-signals.md](supported-signals.md), [legal-and-safety.md](legal-and-safety.md), [module-internals.md](module-internals.md) |
 | Audio | Generated audio from OpenAI, ElevenLabs and Microsoft passes through the video path unchanged | [known-limitations.md](known-limitations.md) |
 | Attack literature | Fidelity band on open encoders now 30-45 dB; WmForger and WMCopier status | [synthid-removal-research.md](synthid-removal-research.md), [watermark-forgery-study.md](watermark-forgery-study.md) |
@@ -53,9 +53,10 @@ This page is an index. Each finding lives in its canonical page.
   guide (TC260-PG-20258A) covers documents this image and video tool does not
   process. The security-protection guide (TC260-PG-202511A) records a
   `SecurityData` JSON object, a digital signature over the label and optionally
-  the content, in `ReservedCode1` and `ReservedCode2`. MiniMax is the one
-  producer in the local corpus that writes a guide-shaped object (checked
-  2026-09-29): four MiniMax videos served by Higgsfield and Runway, two of them
+  the content, in `ReservedCode1` and `ReservedCode2`. MiniMax was the one
+  producer in the local corpus writing a guide-shaped object when checked
+  on 2026-09-29 (Honor RSA/content samples were added in the public-web
+  follow-up below): four MiniMax videos served by Higgsfield and Runway, two of them
   tracked (`higgsfield-hailuo-2-3.mp4`, `higgsfield-minimax-h3.mp4`), carry
   `SecurityData` with two SM3withSM2 (`1.2.156.10197.1.501`) signatures and one
   public key, `KeyValue` `00a0b3b0...47e4fd` in all four. The label signature
@@ -148,21 +149,129 @@ This page is an index. Each finding lives in its canonical page.
   X300 camera capture carries a vivo device manifest (`digitalCapture`) that
   the bundled reader cannot open (`unknown algorithm`).
 - **Chinese phone galleries.** Huawei's help pages say the Xiaoyi photo-edit AI
-  watermark can be switched off; Honor, OPPO and Xiaomi label behavior is not
-  documented in any primary source found. vivo's Album setting is already
-  covered.
+  watermark can be switched off; vivo's Album setting is already covered.
+  The public-web follow-up below found Honor YOYO metadata and additional
+  primary-source labeling evidence, but not a controlled gallery export set. A live
+  conformance-list recheck on 2026-09-30 also found `Xiaomi MediaEditor` as a
+  generator product, `Xiaomi Gallery` as a validator, and both generator and
+  validator entries for `vivo Albums` / `JOVI Albums`. These roles describe C2PA
+  production and validation, not whether an edit is generative. Original exports
+  of an unedited control, an ordinary crop, and a generative edit are still needed
+  per app before selecting an AI attribution rule. Record the device, OS/app
+  version, region, operation, and original download path with each sample.
 - **Claims not supported by a primary source.** Kling embedding SynthID
   (repeated by remover blogs; Kuaishou is not in Google's adopter list),
   Hailuo pixel watermarks, and platforms stripping C2PA on upload. None is used
   by the library.
-- **Google Photos small edits (deferred).** The "SynthID present" rule for
-  Photos AI edits rests on four checked edits, none of them tiny. Still to
-  measure on the phone app: a tiny eraser edit, a large one, a small "Help me
-  edit" change, a restyle, and a crop-only control, each checked in Gemini. iPhone
-  Mirroring does not show the Photos editing toolbar, and the web editor has no
-  generative tool, so this needs edits made on the device.
+- **Google Photos small edits (six-file oracle check complete).** On
+  2026-09-30, iPhone Mirroring successfully exposed the iOS
+  editing toolbar. One source and five separate copies were captured: a large
+  Magic eraser edit, a small removal through `Help me edit`, a small color
+  change through the same tool, a watercolor restyle, and a crop-only control.
+  The four AI exports carry Google Photos C2PA with valid signatures and asset
+  bindings; the signer remains untrusted without a configured trust-anchor list.
+  Neither the unchanged source nor the crop control has detected AI metadata.
+  Original-quality downloads, hashes, operation records, and metadata reports
+  are retained privately outside the repository. The restyle was exported at
+  768 x 1365; the other AI copies retain the source's displayed dimensions.
+  The hash-bound Gemini batch passed complete verification on 2026-10-01 UTC:
+  large Magic Eraser and watercolor restyle were `detected`; small removal and
+  recoloring through `Help me edit` were `indeterminate`, with a possibly
+  too-small edit cited; source and crop were `not_detected`. AI metadata was
+  stripped without changing decoded pixels. All six settled replies were
+  recorded, one file per new chat. No quota refusal occurred and no request was
+  repeated. The Photos-specific report caveat now names the inconclusive small
+  edits rather than describing every tested AI edit as positive. A tiny Magic
+  eraser mask remains unmeasured: its automatic selection expanded to a
+  large region, so the small removal used `Help me edit` instead. One source and
+  one export per operation cannot establish representative or repeatable behavior.
 - **Captures blocked by region or device.** Doubao, Jimeng, Samsung. Higgsfield,
   Runway and Dreamina were captured on paid plans on 2026-09-24.
+
+### Public-web sample search, 2026-10-01 UTC
+
+The follow-up searched official product/model pages, support articles,
+provider communities, public share links, and public sample repositories.
+Candidates were downloaded unchanged to a gitignored local evidence directory,
+with source URLs, referring pages, SHA-256 hashes, metadata inspection, and
+contact sheets. Website assets include icons, UI screenshots, source images,
+outputs, and duplicate size variants; their count is not a count of genuine
+provider exports. No third-party photograph was added to tracked fixtures.
+
+- **Honor YOYO: metadata sample found.** Two JPEGs in this
+  [author's edit thread](https://club.honor.com/cn/thread-29898091-1-1.html)
+  retain EXIF `UserComment` containing `AIGC`, producer
+  `001191440300MA5G49LC9K1YO01`, and nested `TC260PG` blocks with RSA/SHA-256
+  OID `1.2.840.113549.1.1.11`. The author's post reports a Magic6 Pro;
+  OS/app versions are unknown. The downloaded files are 1312 x 736 and smaller
+  than the attachment sizes displayed by the forum, so original export fidelity
+  is unproven. Their visible overlay includes a community account attribution,
+  which is not evidence of an AI disclosure badge. The reader now preserves
+  nested reserved fields as JSON and attributes the measured code to Honor.
+  It reports the RSA/content signature as unsupported.
+  Public-key exponentiation on both signatures yields PKCS#1 type-1 padding
+  followed by a bare 32-byte value, without the SHA-256 DigestInfo prefix;
+  that value differs from the downloaded file hash. Together with null
+  `Bindings.Value`, `TBSData.Type=Content`, no content-selection method, and
+  forum resizing, this leaves asset integrity unverified. An embedded public
+  key alone would not establish manufacturer identity either.
+  Honor's [official privacy statement](https://agreement.itsec.honor.com/asm/agrFile/getHtmlFile?agrNo=1477&branchId=0&country=ru&langCode=en-US&version=20250517)
+  independently confirms the producer's USCC. Historical replay also found
+  that company code with a different product suffix; attribution names Honor,
+  because the USCC alone does not establish the application. A publication-safe
+  structural fixture and lossless metadata-removal test are documented in
+  [the fixture catalog](../data/fixtures/README.md#honor-yoyo-metadata-reconstruction).
+- **vivo and Huawei: UI/source evidence, not original gallery exports.**
+  [vivo technical support](https://bbs.vivo.com.cn/newbbs/thread/39038829)
+  enumerates image/video AI operations that add the label, while a
+  [hands-on guide](https://bbs.vivo.com.cn/newbbs/thread/39038546?show_title=1)
+  locates `AI生成` at the upper right. Downloaded community illustrations show
+  settings and editing UI, not a verified signed Albums export.
+  [Huawei's Xiaoyi support article](https://consumer.huawei.com/cn/support/content/zh-cn16070847/)
+  supplies editing/save UI illustrations; those do not establish exported metadata.
+- **OPPO: primary labeling statement found.** Its
+  [imaging product manager interview](https://www.oppo.com/en/newsroom/stories/empowering-creative-freedom-and-expression-in-mobile-photography-with-ai/)
+  states that AI-generated content is labeled. It does not specify the export
+  label's shape or metadata. Its downloadable press kit supplies before/after
+  JPEG pairs for Clarity Enhancer, Reflection Remover, and Unblur, with several
+  3072 x 4096 images. These fetched pairs had no recognized C2PA/AIGC label;
+  they are useful local comparison material but not verified generative-edit
+  exports. Camera AI enhancement and ordinary camera-brand
+  watermarks remain separate from generative-edit provenance.
+- **Jasper, Getty/iStock, RefaceAI: C2PA gaps remain.** Downloaded assets from
+  [Jasper's endpoint examples](https://images.jasper.ai/cleanup),
+  [Getty's generator page](https://www.gettyimages.com/ai/generation),
+  [iStock's generator page](https://www.istockphoto.com/ai/generation), and
+  [Reface's product site](https://reface.ai/) did not carry locally recognized
+  C2PA. Jasper explicitly distinguishes input/mask/output examples, but an
+  unsigned web derivative cannot establish its signed export's manifest shape.
+  Conformance certificates alone still do not justify fabricating that shape.
+- **Visible-image/video gaps remain.** The downloaded RunningHub workflow
+  illustrations are explanatory/branding assets, not verified output examples;
+  Liblib API documentation's cat illustration has no visible historical wordmark.
+  A public [Inkpainting model page](https://www.liblib.art/modelinfo/2acd393c23924ff9b5363c9c1ec9129f)
+  explicitly attributes its example generation to Liblib; its read-only model
+  lookup supplied nine full PNG examples. These show ink-style illustrations
+  and a model cover, without the historical LiblibAI wordmark.
+  A public Vidu homepage MP4 was obtainable, but the inspected frame has no Vidu
+  mark. Seedance and Wan marketing assets, Dola extension screenshots, and
+  the Doubao share page did not initially yield marked consumer videos. A
+  subsequent public `samantha/media/get_play_info` lookup returned a 720 x 960,
+  10.08-second H.264/AAC MP4 (SHA-256
+  `0a000352e6f9b3e8417e57403572ef4a7a0e94fc8840217162e90c199a478def`).
+  Its decoded frame visibly carries `豆包AI生成` at bottom right; the file
+  remains local because publication has not been cleared. `identify_video`
+  attributes it to ByteDance Doubao and detects the mark on all 241 frames;
+  its MP4 TC260 producer is `001191110102MACQD9K64010000`.
+  Samsung's support illustrations are UI evidence, not a controlled original
+  export set. No new visible template or proprietary-watermark verdict follows
+  from these candidates. Xiaomi labeling tutorials surfaced, but their attribution
+  and original exports remain unverified.
+
+Next acquisition targets remain a signed export per missing C2PA signer, an
+unedited/crop/generative-edit set per gallery, and original marked consumer
+videos. Honor's nested RSA signature form is a separate verification gap; the
+synthetic fixture deliberately does not pretend to close it.
 
 ## Decisions
 

@@ -3,6 +3,31 @@
 These files exercise real container, metadata, and pixel-provenance formats.
 They are test inputs, not evaluation corpora.
 
+## Honor YOYO metadata reconstruction
+
+`synthetic/honor-yoyo-tc260.json` reconstructs the EXIF `UserComment` JSON
+structure observed in two public YOYO edits in this
+[Honor Club thread](https://club.honor.com/cn/thread-29898091-1-1.html), fetched
+on 2026-10-01 UTC. The downloaded JPEGs have SHA-256
+`99aa5cdf42cd4c3849401a32fc1f0738c229cc3ed903eba00a080e7eb29542d5` and
+`af779adba954926bb15bb9cb70ff597cb11e715b53e204fce5e64b1edf971aa1`.
+They remain untracked because public redistribution has not been cleared.
+
+The fixture retains the observed producer `001191440300MA5G49LC9K1YO01`,
+nested `ReservedCode1`/`ReservedCode2` objects, `PubSd` spelling, null hash
+binding, and RSA/SHA-256 algorithm identifiers. Generation IDs, signature,
+and public key are explicit synthetic placeholders. It contains no photograph,
+account handle, real signature, or claim of a valid asset binding. The producer's
+USCC matches Honor Device Co., Ltd. in its
+[official privacy statement](https://agreement.itsec.honor.com/asm/agrFile/getHtmlFile?agrNo=1477&branchId=0&country=ru&langCode=en-US&version=20250517).
+
+`tests/test_web_sample_fixtures.py` is the carrier recipe: it embeds this JSON
+in a solid-color JPEG, checks Honor attribution and preservation of nested JSON,
+reports the content signature as unsupported, and verifies removal preserves
+decoded pixels. This synthetic test input
+is distributed under the repository license. It does not establish gallery
+control/crop behavior, device/app versions, or a real verified RSA signature.
+
 ## OpenRouter metadata survey
 
 The following files are original byte streams returned by OpenRouter's Image

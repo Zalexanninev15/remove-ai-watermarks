@@ -146,3 +146,13 @@ class TestReadBytesAuth:
         monkeypatch.setenv("GITHUB_TOKEN", "test-token")
         headers = self._urlopen_headers("https://raw.githubusercontent.com/example/example/main/x.json")
         assert "Authorization" not in headers
+
+
+@pytest.mark.parametrize("entry", C2PA_SOFT_BINDING_REGISTRY, ids=lambda entry: entry.algorithm)
+def test_every_soft_binding_algorithm_keeps_exact_token_boundaries(entry):
+    from remove_ai_watermarks._internal.c2pa import soft_binding_registry_entries_in
+
+    token = entry.algorithm.encode()
+    assert entry in soft_binding_registry_entries_in(b'"' + token + b'"')
+    for prefix, suffix in ((b"prefix", b""), (b"", b".suffix"), (b"-", b""), (b"", b"1")):
+        assert entry not in soft_binding_registry_entries_in(prefix + token + suffix)

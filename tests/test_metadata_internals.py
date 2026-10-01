@@ -849,7 +849,7 @@ class TestC2paBufferScans:
         assert c2pa_info_from_manifest_store(store).get("synthid_vendors") == expected
 
     def test_google_photos_ai_edit_establishes_synthid_without_an_action(self):
-        """Byte-scan path: Google's checker found SynthID on every Photos AI edit tested."""
+        """Byte-scan path keeps the measured Photos inference, not a pixel verdict."""
         from remove_ai_watermarks._internal.c2pa import synthid_evidence_vendors_in
 
         edit = b"c2pa Google LLC Google Photos c2pa.deleted compositeWithTrainedAlgorithmicMedia"
@@ -1265,3 +1265,21 @@ def test_byte_fallback_reads_ai_disclosure_label():
     info: dict = {}
     assert _populate_registry_fields(b"jumb c2pa c2pa.ai-disclosure modelType human_validated", info) is True
     assert info["ai_source_kind"] == "enhanced"
+
+
+def test_soft_binding_scan_skips_regex_when_no_identifier_is_present(monkeypatch):
+    from remove_ai_watermarks._internal import c2pa
+
+    calls = []
+    original_search = c2pa.re.search
+
+    def recording_search(pattern, buffer, *args, **kwargs):
+        calls.append(pattern)
+        return original_search(pattern, buffer, *args, **kwargs)
+
+    monkeypatch.setattr(c2pa.re, "search", recording_search)
+    assert c2pa.soft_binding_registry_entries_in(b"ordinary metadata without an algorithm identifier") == ()
+    assert calls == []
+    entries = c2pa.soft_binding_registry_entries_in(b'"com.microsoft.invismark.1"')
+    assert [entry.algorithm for entry in entries] == ["com.microsoft.invismark.1"]
+    assert len(calls) == 1

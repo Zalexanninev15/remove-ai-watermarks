@@ -49,6 +49,8 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
+from remove_ai_watermarks._internal.tc260_producers import producer_codes_for_mark, producer_for_code
+
 logger = logging.getLogger(__name__)
 
 Region = tuple[int, int, int, int]
@@ -293,9 +295,8 @@ class KnownMark:
     provenance_platform_tokens: tuple[str, ...] = ()
     # TC260 ``ContentProducer`` identities that name THIS mark's vendor -- Unified
     # Social Credit Codes as normalized by ``metadata.uscc_of``, plus the bare product
-    # names a few generators write instead. Here rather than in a separate table
-    # because a newly registered TC260 mark whose codes were forgotten fails SILENTLY:
-    # its own detector remains strict even on an image carrying that producer's label.
+    # names a few generators write instead. Derived from TC260_PRODUCERS; the
+    # registry-coverage test prevents a TC260 mark from silently omitting its codes.
     tc260_producer_codes: tuple[str, ...] = ()
     # Optional single-pass dual verdict for the arbiter's perception stage (see
     # `detect_both`). None = fall back to two `_detect` calls.
@@ -612,7 +613,6 @@ def _text_mark(
     product: str | None = None,
     label_regime: str | None = "tc260",
     provenance_signals: tuple[str, ...] = ("aigc",),
-    tc260_producer_codes: tuple[str, ...] = (),
     provenance_platform_tokens: tuple[str, ...] = (),
 ) -> KnownMark:
     """Build a text-mark registry row from its shared detector and mask adapters.
@@ -635,7 +635,7 @@ def _text_mark(
         _engine_mark_detect(key, label, location),
         _engine_mark_mask(key),
         provenance_signals=provenance_signals,
-        tc260_producer_codes=tc260_producer_codes,
+        tc260_producer_codes=producer_codes_for_mark(key),
         provenance_platform_tokens=provenance_platform_tokens,
         _detect_both=_engine_mark_detect_both(key, label, location),
     )
@@ -696,7 +696,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="ByteDance Doubao (visible 豆包AI生成 mark detected)",
         manufacturer="bytedance",
-        tc260_producer_codes=("91110102MACQD9K640", "doubao"),
     ),
     _text_mark(
         "jimeng",
@@ -704,7 +703,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="ByteDance Jimeng / Dreamina (visible 即梦AI mark detected)",
         manufacturer="bytedance",
-        tc260_producer_codes=("9144030008867405X2",),
     ),
     _text_mark(
         "qwen",
@@ -712,7 +710,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="Alibaba Cloud Qwen (visible text or symbol mark detected)",
         manufacturer="alibaba",
-        tc260_producer_codes=("91440101MA9Y9T4H7A",),
     ),
     _text_mark(
         "wan",
@@ -720,9 +717,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="Alibaba Wan (visible Wan mark detected)",
         manufacturer="alibaba",
-        # Tongyi Yunqi (Hangzhou) Information Technology, owned by Alibaba Cloud and
-        # Tongyi Lab: the ContentProducer on the measured Wan export.
-        tc260_producer_codes=("91330106MA2CFLDG4R",),
     ),
     _text_mark(
         "kling",
@@ -730,9 +724,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="Kuaishou Kling AI (visible 可灵AI / KlingAI 3.0 mark detected)",
         manufacturer="kuaishou",
-        # Kling 3.0 Turbo video served by Higgsfield (2026-09-24) names the
-        # producer by the bare string "kling" instead of a USCC.
-        tc260_producer_codes=("91110108335469089C", "kling"),
     ),
     _text_mark(
         "yuanbao",
@@ -740,7 +731,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="Tencent Yuanbao (visible 元宝 / AI生成 mark detected)",
         manufacturer="tencent",
-        tc260_producer_codes=("91440300708461136T",),
     ),
     # Samsung Galaxy AI is a device editing marker (samsung_genai), not a TC260 label.
     _text_mark(
@@ -758,7 +748,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "top-left",
         platform="RunningHub (visible RunningHub AI生成 mark detected)",
         manufacturer="runninghub",
-        tc260_producer_codes=("91340100MAEB4N8H76", "RunningHub"),
     ),
     _text_mark(
         "baidu",
@@ -766,7 +755,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="Baidu (visible 百度 AI生成 mark detected)",
         manufacturer="baidu",
-        tc260_producer_codes=("91110000802100433B",),
     ),
     _text_mark(
         "liblib",
@@ -774,7 +762,6 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-center",
         platform="LiblibAI (visible LiblibAI mark detected)",
         manufacturer="liblib",
-        tc260_producer_codes=("91110105MACJ6K1C8A",),
     ),
     KnownMark(
         "liblib_pill",
@@ -943,7 +930,8 @@ def resolve_trust(
 
 def tc260_producer_mark(code: str) -> KnownMark | None:
     """Return the registry row for one TC260 ``ContentProducer`` identity."""
-    return next((mark for mark in _REGISTRY if code in mark.tc260_producer_codes), None)
+    producer = producer_for_code(code)
+    return get_mark(producer.image_mark) if producer and producer.image_mark else None
 
 
 def _pill_suppressors() -> set[str]:

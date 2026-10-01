@@ -197,6 +197,8 @@ C2PA_ISSUERS = {vendor.issuer: vendor.org for vendor in C2PA_AI_VENDORS}
 # absent: its manifests record no SynthID action, yet Google's checker found
 # SynthID on all four Photos AI edits tested (Ask, eraser and two other edits,
 # 2026-09-25), although Google documents the mark only for Reimagine.
+# Two small edits were oracle-indeterminate on 2026-10-01 UTC; Photos inference
+# therefore carries a file-specific confirmation caveat in the report.
 SYNTHID_EDIT_SIGNERS: tuple[bytes, ...] = (b"YouTube",)
 C2PA_IDENTITY_AI_ORGS = frozenset(vendor.org for vendor in C2PA_AI_VENDORS if vendor.asserts_ai)
 C2PA_SIGNER_PLATFORM_BY_ORG = {

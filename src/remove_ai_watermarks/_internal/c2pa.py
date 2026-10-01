@@ -754,8 +754,9 @@ def soft_binding_registry_entries_in(buffer: bytes) -> tuple[C2paSoftBindingAlgo
     return tuple(
         entry
         for entry in C2PA_SOFT_BINDING_REGISTRY
-        if re.search(
-            rb"(?<![A-Za-z0-9.-])" + re.escape(entry.algorithm.encode()) + rb"(?![A-Za-z0-9.-])",
+        if (algorithm := entry.algorithm.encode()) in buffer
+        and re.search(
+            rb"(?<![A-Za-z0-9.-])" + re.escape(algorithm) + rb"(?![A-Za-z0-9.-])",
             buffer,
         )
     )

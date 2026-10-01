@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from datetime import UTC
 from pathlib import Path
 
 import piexif
@@ -277,7 +278,7 @@ def test_exif_parser_failure_is_partial(tmp_path, monkeypatch):
         "visible/microsoft/provider-original.png",
     ],
 )
-def test_c2pa_signing_ekus_validate_without_trusting_the_signer(relative_path, monkeypatch):
+def test_c2pa_signing_ekus_validate_without_trusting_the_signer(relative_path):
     from remove_ai_watermarks._internal import c2pa
 
     source = Path(__file__).resolve().parents[1] / "data" / "fixtures" / relative_path
@@ -295,6 +296,79 @@ def test_c2pa_signing_ekus_validate_without_trusting_the_signer(relative_path, m
         assert "claim.malformed" in info["c2pa_validation_codes"]
         assert "com.microsoft.invismark.1" in info["soft_binding_algorithm"]
 
+
+def _signed_c2pa_profile_sample(tmp_path):
+    """Sign a neutral carrier with a local certificate whose dates we control."""
+    from datetime import datetime
+
+    from c2pa import Builder, C2paSignerInfo, Context, Signer
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    key = ed25519.Ed25519PrivateKey.generate()
+    name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "Synthetic C2PA profile test")])
+    document_signing = "1.3.6.1.5.5.7.3.36"
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(1)
+        .not_valid_before(datetime(2020, 1, 1, tzinfo=UTC))
+        .not_valid_after(datetime(2120, 1, 1, tzinfo=UTC))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.KeyUsage(True, False, False, False, False, False, False, None, None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([x509.ObjectIdentifier(document_signing)]), critical=False)
+        .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()), critical=False)
+        .sign(key, None)
+    )
+    signer_info = C2paSignerInfo(
+        "ed25519",
+        certificate.public_bytes(serialization.Encoding.PEM),
+        key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()),
+        None,
+    )
+    source = tmp_path / "neutral.jpg"
+    output = tmp_path / "signed.jpg"
+    Image.new("RGB", (32, 32), (50, 100, 150)).save(source)
+    manifest = {
+        "claim_generator": "Synthetic C2PA profile test",
+        "assertions": [
+            {
+                "label": "c2pa.actions",
+                "data": {
+                    "actions": [
+                        {
+                            "action": "c2pa.created",
+                            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+    with (
+        Context.from_dict({"trust": {"trust_config": document_signing}}) as context,
+        Signer.from_info(signer_info) as signer,
+        Builder(manifest, context=context) as builder,
+        source.open("rb") as input_stream,
+        output.open("wb") as output_stream,
+    ):
+        builder.sign(signer, "image/jpeg", input_stream, output_stream)
+    return output
+
+
+def test_c2pa_wrong_eku_rejects_a_real_synthetic_signature(tmp_path, monkeypatch):
+    from remove_ai_watermarks._internal import c2pa
+
+    source = _signed_c2pa_profile_sample(tmp_path)
+    accepted = c2pa.extract_c2pa_info(source)
+    assert accepted["c2pa_integrity"] == accepted["c2pa_signature"] == "valid"
+    assert accepted["c2pa_signer_validity"] == "valid"
+    assert accepted["c2pa_signer_trust"] == "untrusted"
+    assert identify(source, check_visible=False, check_invisible=False).is_ai_generated is True
+
     # Exercise the real reader with an unrelated EKU, not a mocked validation result.
     monkeypatch.setattr(c2pa, "_C2PA_ALLOWED_EKUS", "1.2.3.4.5.99999")
     c2pa._manifest_json_cached.cache_clear()
@@ -304,7 +378,7 @@ def test_c2pa_signing_ekus_validate_without_trusting_the_signer(relative_path, m
         assert rejected["c2pa_integrity"] == rejected["c2pa_signature"] == "valid"
         assert rejected["c2pa_signer_validity"] == "invalid"
         assert "signingCredential.invalid" in rejected["c2pa_validation_codes"]
-        assert identify(source, check_visible=False, check_invisible=False).platform is None
+        assert identify(source, check_visible=False, check_invisible=False).is_ai_generated is None
     finally:
         c2pa._manifest_json_cached.cache_clear()
         c2pa._extract_c2pa_info_cached.cache_clear()

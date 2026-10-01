@@ -1,0 +1,53 @@
+{
+  "AIGC": {
+    "ContentProducer": "001191440300MA5G49LC9K1YO01",
+    "ContentPropagator": "001191440300MA5G49LC9K1YO01",
+    "Label": "1",
+    "ProduceID": "synthetic-yoyo-fixture",
+    "PropagateID": "synthetic-yoyo-fixture",
+    "ReservedCode1": {
+      "SecurityData": {
+        "Type": "TC260PG",
+        "Version": 1,
+        "Bindings": [
+          {"Type": "Hash", "AlgID": "2.16.840.1.101.3.4.2.1", "Value": null}
+        ],
+        "PubSd": [
+          {
+            "Type": "DS",
+            "AlgID": "1.2.840.113549.1.1.11",
+            "TBSData": {"Type": "Content"},
+            "Signature": "synthetic-signature-not-valid"
+          },
+          {
+            "Type": "PubKey",
+            "AlgID": "1.2.840.113549.1.1.11",
+            "KeyValue": "synthetic-public-key-not-valid"
+          }
+        ]
+      }
+    },
+    "ReservedCode2": {
+      "SecurityData": {
+        "Type": "TC260PG",
+        "Version": 1,
+        "Bindings": [
+          {"Type": "Hash", "AlgID": "2.16.840.1.101.3.4.2.1", "Value": null}
+        ],
+        "PubSd": [
+          {
+            "Type": "DS",
+            "AlgID": "1.2.840.113549.1.1.11",
+            "TBSData": {"Type": "Content"},
+            "Signature": "synthetic-signature-not-valid"
+          },
+          {
+            "Type": "PubKey",
+            "AlgID": "1.2.840.113549.1.1.11",
+            "KeyValue": "synthetic-public-key-not-valid"
+          }
+        ]
+      }
+    }
+  }
+}

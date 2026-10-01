@@ -13,6 +13,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Literal
 
+from remove_ai_watermarks._internal.tc260_producers import TC260_PRODUCERS
 from remove_ai_watermarks.video_synthid import (
     DEFAULT_VIDEO_SYNTHID_FPS,
     DEFAULT_VIDEO_SYNTHID_LONG_SIDE,
@@ -218,11 +219,12 @@ _VISIBLE_PLATFORM = {
     "sora": "OpenAI Sora",
     "veo": "Google Veo",
     "seedance": "ByteDance Seedance",
-    "doubao": "ByteDance Doubao",
     "dola": "ByteDance Dola",
-    "hailuo": "MiniMax Hailuo AI",
-    "vidu": "ShengShu Vidu",
-    "kling": "Kuaishou Kling AI",
+    **{
+        row.video_mark: row.video_platform
+        for row in TC260_PRODUCERS
+        if row.video_mark is not None and row.video_platform is not None
+    },
 }
 
 
@@ -379,30 +381,11 @@ def _platform_from_video_metadata(markers: dict[str, str]) -> str | None:
 
 
 def _tc260_video_platform(producer: str) -> str | None:
-    """Name the organization a TC260 ``ContentProducer`` identifies, if registered.
+    """Name a registered TC260 producer, preserving multi-model organization labels."""
+    from remove_ai_watermarks._internal.tc260_producers import producer_for_code
 
-    Codes come from the registry rows (plus the Vidu constant); the labels name
-    the producer, not one product, because one code can cover several models (the
-    Tongyi Yunqi code signs both Wan and HappyHorse video, measured 2026-09-24).
-    MiniMax writes its bare name instead of a USCC.
-    """
-    from remove_ai_watermarks.video_visible import VIDU_TC260_PRODUCER_CODES, tc260_producer_in
-    from remove_ai_watermarks.watermark_registry import get_mark
-
-    labels = {
-        "kling": _VISIBLE_PLATFORM["kling"],
-        "doubao": _VISIBLE_PLATFORM["doubao"],
-        "qwen": "Alibaba Cloud Qwen",
-        "wan": "Alibaba Tongyi (Wan, HappyHorse)",
-    }
-    for key, label in labels.items():
-        if tc260_producer_in(producer, get_mark(key).tc260_producer_codes):
-            return label
-    if tc260_producer_in(producer, VIDU_TC260_PRODUCER_CODES):
-        return _VISIBLE_PLATFORM["vidu"]
-    if tc260_producer_in(producer, ("MiniMax",)):
-        return _VISIBLE_PLATFORM["hailuo"]
-    return None
+    row = producer_for_code(producer)
+    return row.video_platform if row else None
 
 
 def inspect_video_metadata(source: str | Path) -> VideoMetadataReport:

@@ -348,7 +348,7 @@ class TestVendorForStrength:
 
     @pytest.mark.parametrize(("integrity", "expected"), [("valid", "google"), ("invalid", None)])
     def test_google_photos_ai_edit_keeps_the_google_cohort(self, integrity, expected):
-        """A Photos AI edit carries SynthID although its manifest records no SynthID action."""
+        """A Photos AI edit keeps the inferred cohort without a recorded SynthID action."""
         from remove_ai_watermarks._internal.c2pa import c2pa_info_from_manifest_store
         from remove_ai_watermarks._internal.watermark_profiles import vendor_for_strength
 

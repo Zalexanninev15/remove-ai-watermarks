@@ -36,6 +36,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from remove_ai_watermarks._internal.tc260_producers import producer_codes_for_mark
+from remove_ai_watermarks._internal.tc260_producers import tc260_producer_in as tc260_producer_in
 from remove_ai_watermarks.video import VIDEO_VISIBLE_MARKS
 from remove_ai_watermarks.video_encoding import (
     abort_raw_video_encoder,
@@ -50,7 +52,6 @@ from remove_ai_watermarks.video_encoding import (
 from remove_ai_watermarks.video_temporal import stabilize_filled_frame
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
     from pathlib import Path
 
     from numpy.typing import NDArray
@@ -110,9 +111,6 @@ _DOLA_RELATIVE_HEIGHTS = tuple(value / 1000 for value in range(22, 41))
 _HAILUO_RELATIVE_HEIGHTS = tuple(value / 1000 for value in range(28, 56, 3))
 _KLING_RELATIVE_HEIGHTS = tuple(value / 1000 for value in range(24, 49, 3))
 _VIDU_RELATIVE_HEIGHTS = tuple(value / 1000 for value in range(34, 61, 3))
-# ShengShu (北京生数科技有限公司), Vidu's maker, as the USCC inside a TC260
-# ContentProducer. Verified against the Beijing municipal list of 2025-03-03.
-VIDU_TC260_PRODUCER_CODES = ("91110108MACC4D63XF",)
 _HDR_TRANSFERS = frozenset({"smpte2084", "arib-std-b67"})
 
 
@@ -1641,19 +1639,9 @@ def has_bytedance_video_provenance(markers: dict[str, str]) -> bool:
     return ("bytedance" in identity or "byteplus" in identity) and "trainedalgorithmicmedia" in source_type
 
 
-def tc260_producer_in(producer: str, codes: Iterable[str]) -> bool:
-    """Whether a TC260 ``ContentProducer`` names one of ``codes`` (USCC-normalized, casefolded)."""
-    from remove_ai_watermarks.metadata import uscc_of
-
-    code = uscc_of(producer.strip()).casefold()
-    return bool(code) and code in {candidate.casefold() for candidate in codes}
-
-
 def has_doubao_video_provenance(markers: dict[str, str]) -> bool:
     """Whether the structural TC260 producer identifies registered Doubao provenance."""
-    from remove_ai_watermarks.watermark_registry import get_mark
-
-    return tc260_producer_in(markers.get("aigc_producer", ""), get_mark("doubao").tc260_producer_codes)
+    return tc260_producer_in(markers.get("aigc_producer", ""), producer_codes_for_mark("doubao"))
 
 
 # Tokens of the C2PA issuer each mark's own vendor signs with, compared casefolded.
@@ -1708,9 +1696,7 @@ def contradicts_video_provenance(mark: str, markers: dict[str, str]) -> bool:
         return False
     producer = markers.get("aigc_producer", "").strip()
     if mark == "kling" and producer:
-        from remove_ai_watermarks.watermark_registry import get_mark
-
-        return not tc260_producer_in(producer, get_mark("kling").tc260_producer_codes)
+        return not tc260_producer_in(producer, producer_codes_for_mark("kling"))
     from remove_ai_watermarks._internal.c2pa import c2pa_credential_level
 
     issuer = markers.get("issuer", "").casefold()
@@ -1725,7 +1711,7 @@ def contradicts_video_provenance(mark: str, markers: dict[str, str]) -> bool:
 
 def has_vidu_video_provenance(markers: dict[str, str]) -> bool:
     """Whether a TC260 label names ShengShu, Vidu's maker, as the producer."""
-    return tc260_producer_in(markers.get("aigc_producer", ""), VIDU_TC260_PRODUCER_CODES)
+    return tc260_producer_in(markers.get("aigc_producer", ""), producer_codes_for_mark("vidu"))
 
 
 def has_hailuo_video_provenance(markers: dict[str, str]) -> bool:
@@ -1737,4 +1723,4 @@ def has_hailuo_video_provenance(markers: dict[str, str]) -> bool:
     ``metadata.get_ai_metadata``), so this matches the field exactly rather
     than parsing the human-readable ``aigc_label`` sentence.
     """
-    return markers.get("aigc_producer", "").strip().lower() == "minimax"
+    return tc260_producer_in(markers.get("aigc_producer", ""), producer_codes_for_mark("hailuo"))

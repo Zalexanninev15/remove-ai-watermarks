@@ -451,12 +451,38 @@ them is geometry over time: the real overlay's box is identical on every frame,
 texture matches drift, so the Kling policy tightens `anchor_iou` from 0.80 to
 0.95.
 
-A video TC260 label names its platform through `_tc260_video_platform`: the
-Kling, Doubao, Qwen and Wan registry codes, the Vidu constant, and the bare
-`MiniMax`. The labels name the producer organization, because the Tongyi Yunqi
-code signs both Wan and HappyHorse. An unregistered producer keeps the generic
-"China AIGC-labeled content (TC260 standard)". The image path keeps that generic
-platform for every producer and records the manufacturer only for clash checks.
+TC260 producer identities live in
+[`_internal/tc260_producers.py`](../src/remove_ai_watermarks/_internal/tc260_producers.py).
+Each `TC260_PRODUCERS` row records measured bare names/USCCs, the normalized
+vendor, image/video mark keys, established image/video platforms, and any pinned
+signing identity/key. Whole-code lookup is casefolded and strips surrounding
+whitespace; structured `001` producer codes resolve through the same USCC
+normalizer, still exported as `metadata.uscc_of`. Substrings cannot identify a
+producer. The table imports neither pixel nor ML dependencies.
+
+`KnownMark.tc260_producer_codes`, visible-video confirmation, video platform
+labels, and `TC260_SIGNING_KEYS` are derived from these rows. The signature path
+still validates the pinned even-y SM2 point. `identify` uses the registered
+vendor for provenance-conflict checks, with a verified pinned signer supplying
+the vendor even when the text lookup yields nothing. Verification under an
+embedded, unpinned key cannot supply this identity. Unknown producers remain
+unattributed and cannot relax a particular mark. Image platforms default to the
+generic TC260 label; a measured row can supply a more specific label, currently
+Honor. The company USCC does not identify a specific app: YOYO exports and
+other product suffixes share it. Vendor attribution is also used for conflict checks. Video
+platforms preserve the established organization labels, including Tongyi Yunqi
+for both Wan and HappyHorse.
+
+`tests/test_tc260_producers.py` covers all registered identities across image,
+video, and mark routing, normalizes code spellings, and checks every neighboring
+producer against the Doubao, Hailuo, and Vidu confirmation gates.
+`tests/test_sm2.py` exercises the real signed label with text lookup disabled,
+then removes the pinned key and requires vendor attribution to disappear.
+The 2026-09-30 migration comparison covered 411 local images and videos with
+identical input hashes: C2PA metadata and complete metadata-only `identify`
+reports were unchanged. This comparison excludes pixel detection, removal,
+GPU paths, and the video identification pipeline; video routing is covered by
+the consumer tests.
 
 Removal runs in a second decode pass. Sora, legacy Veo text, Dola text,
 Seedance, Hailuo AI, and Kling AI use box masks. Seedance deliberately fills the
@@ -527,9 +553,18 @@ provider original. Their leaf certificates contain the C2PA/document-signing
 or Microsoft C2PA-signing EKUs that were cleared. Explicit per-reader settings
 restore the previous acceptance policy; the signers remain `untrusted`.
 `test_c2pa_signing_ekus_validate_without_trusting_the_signer` exercises all five
-through the real reader, then replaces the permitted EKUs with an unrelated OID
-and requires credential rejection with intact signature and asset hash. Removing
-the context from the reader call makes all five positive cases fail.
+through the real reader. The negative EKU check uses a neutral image signed by
+the SDK with a local synthetic certificate, fixed validity dates, and no trust
+anchors. Replacing permitted EKUs with an unrelated OID must reject that
+credential while preserving its signature and asset hash; the AI claim then
+loses attribution. Removing the reader context fails the synthetic positive case.
+
+The Bing and Microsoft visible fixtures' leaf certificate expired on
+2026-10-01 at 17:43:59 UTC. The SDK checks expiry before permitted EKUs, so an
+expired original cannot distinguish the negative profile mutation: it returns
+`signingCredential.expired` for both profiles. Keep originals in attribution
+checks and use the generated certificate for that mutation. Expiry does not
+invalidate a signature made inside validity or prove that its asset changed.
 
 Microsoft's same fixtures also report `claim.malformed` under the newer SDK.
 Their soft-binding block stores a GUID as a text string, whereas
@@ -585,6 +620,12 @@ The structured walk also treats an exact known AI product in a reachable
 manifest names only `c2pa-tool` while a validated ingredient names Dreamina, and
 Firefly chains that identify `Adobe_Firefly` without repeating a digital source
 type. Unreachable manifests remain excluded.
+
+The fallback soft-binding scan checks literal identifier presence before its
+ASCII token-boundary regex. This avoids running every registry regex on files
+without algorithm names and preserves exact matching, including rejection of
+prefixes and version suffixes. Tests pin boundaries for every generated registry
+entry and assert that an identifier-free buffer runs no regex searches.
 
 Reachable `c2pa.soft-binding*` assertions retain their exact `alg` and bounded,
 printable block `value` in addition to the normalized vendor label. A block value
@@ -704,10 +745,15 @@ Key contracts:
   the guide's `Md`. Only the label signature is checked: MiniMax's binding
   signature also verifies, but no verdict reads it, and its content hash is not
   recomputed because MiniMax names no `CntSel`. The key travels in the file, so
-  only a key pinned in `TC260_SIGNING_KEYS` names a signer, and a pinned signer
+  only a key pinned in `TC260_PRODUCERS` (the source of `TC260_SIGNING_KEYS`)
+  names a signer, and a pinned signer
   is checked with the pinned point whatever parity the file claims; an unpinned
-  key that verifies proves integrity only and adds no signal. `ReservedCode2`,
-  the propagator's slot, is not read because no sample fills it. Verifications
+  key that verifies proves integrity only and adds no signal. Both reserved
+  fields preserve nested objects as JSON. Honor YOYO uses `PubSd`, RSA/SHA-256
+  and `TBSData.Type=Content` with a null binding hash and no content selection;
+  this form is recognized and reported as unsupported, not absent or verified.
+  Only the producer slot is checked; Honor's repeated propagator slot adds no
+  independent verification. Verifications
   are memoized, since `get_ai_metadata` and the verdict check the same label.
   `tests/test_sm2.py` pins the GB/T 32905 SM3 vectors, OpenSSL's SM2 verify
   vectors, and the real MiniMax signatures. Over 411 local images and videos the
@@ -799,6 +845,12 @@ metadata extraction from verdict logic:
   reported no SynthID for images the file path flagged.
 - `identify` preserves the path-based API and adds the optional registered
   visible-mark and open invisible-watermark detectors after extraction.
+- The Google Photos SynthID caveat distinguishes the measured cohort from a
+  pixel verdict on the current file. Four earlier edits were oracle-positive
+  (2026-09-25); a large eraser and a restyle were positive while two small edits
+  were indeterminate (2026-10-01 UTC). Their C2PA shape does not distinguish
+  these outcomes. See [the Photos measurements](synthid.md) for the inference's
+  limits; the CLI does not call the provider verifier.
 - When the pixel stack is absent, the visible arm still no-ops (that is the
   historical `get_or_none` contract), but the report now carries a caveat saying
   the detectors did NOT run. Without it, an install lacking the `visible` extra
@@ -1535,7 +1587,8 @@ regime: Alibaba, ByteDance, Kuaishou, Tencent, and other companies all use TC260
 but their marks do not belong to one manufacturer family.
 `identify._VISIBLE_MARK_PLATFORM` and the signal mapping in
 `api.visible_provenance` are derived from those rows rather than hand-maintained
-beside them, so registering a mark is one edit. Two marks carry no platform of
+beside them. A TC260 mark also needs its producer row in `TC260_PRODUCERS`;
+registry-coverage tests reject missing mappings. Two marks carry no platform of
 their own: the Gemini sparkle has its own higher-confidence path, and the pill
 alone is too weak to attribute.
 
@@ -1547,7 +1600,8 @@ standard. Marks from other manufacturers cannot enable or veto the
 ByteDance-specific arm.
 
 A TC260 label relaxes the vendor its `ContentProducer` names, resolved through
-`KnownMark.tc260_producer_codes`. The label itself is vendor-agnostic, so this used to
+the shared producer table, which also supplies `KnownMark.tc260_producer_codes`.
+The label itself is vendor-agnostic, so this used to
 relax ByteDance's two products on every China-AIGC image -- which both risked a
 false fill on an image carrying some other vendor's mark and denied that vendor's
 own mark the relaxed gate its `provenance_ncc_factor` was calibrated for. An
