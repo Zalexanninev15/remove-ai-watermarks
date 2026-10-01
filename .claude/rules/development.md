@@ -27,10 +27,12 @@ top-level Python API, and runtime detection/removal pipelines.
 
 The unified maintainer entry point is `scripts/provider_oracles.py`; its workflow and
 slot schema live in `docs/provider-oracles.md`. Multi-account and multi-network work
-selects one named slot explicitly from the gitignored repository-local
-`.oracle-slots.json` by default and snapshots it into the immutable batch manifest.
-Never commit the local slot file.
-Do not add account or IP rotation, rate-limit failover, or cross-session result merging.
+selects each named slot explicitly from the gitignored repository-local
+`.oracle-slots.json` by default and snapshots it into a separate immutable batch
+manifest. A bounded provider check may continue through its finite set of authorized
+account slots after a refusal; do not add new logins, IP rotation, network-route
+failover, unbounded retries, or cross-session result merging. Never commit the local
+slot file.
 Every manual result stays bound to the exact sanitized upload hash and preserves the
 provider response verbatim.
 

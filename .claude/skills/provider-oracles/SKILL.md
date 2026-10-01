@@ -14,9 +14,24 @@ Named slots live in the gitignored repository-local
 pass `--slots PATH` only to override the local path.
 
 Never substitute one provider's negative verdict for another provider's signal.
-Do not optimize candidates adaptively against an external oracle. A retry,
-different account, or different network is a new explicit operator decision,
-not automatic fallback.
+Do not optimize candidates adaptively against an external oracle.
+
+## Account continuation
+
+A request to verify a bounded set of files with a provider authorizes using that
+provider's configured account slots unless the user limits the account scope.
+Before starting, identify the finite set of available authenticated slots and
+prepare one immutable batch per slot. After a quota refusal or service failure,
+record the exact response, leave that slot's remaining rows unsubmitted, and
+continue automatically through the remaining authorized slots. Do not stop to
+request permission for each account or file already covered by the task.
+
+Submit each frozen artifact at most once per slot in that pass. Preserve
+inconclusive results and disagreements between accounts. Stop when the bounded
+plan is complete or no authorized usable slot remains; report remaining rows.
+New logins, another provider, a new network route, or another pass after the plan
+is exhausted require authorization unless already requested. Account
+continuation does not authorize changing candidate pixels or erasing failures.
 
 ## Default surface priority
 
@@ -50,8 +65,10 @@ Playwright CLI runner, copied cookies, or a new login.
    AI metadata. Inspect the prepared upload again and do not submit it if a visible
    provider mark remains. A model answer based on a visible logo is not a SynthID
    result.
-4. Before each upload, request the action-time confirmation required for sending
-   that exact prepared file to Gemini. Do not upload the source path directly.
+4. Confirm that the prepared files and provider are covered by the user's
+   request or existing upload approval. Ask only if that scope is missing or
+   changed; do not request confirmation again for each file or account in the
+   authorized plan. Do not upload the source path directly.
 5. Attach one prepared upload and ask: `Does this image/video/audio contain a
    SynthID watermark? Use the SynthID verification tool only; do not infer from
    visible content, logos, text, or metadata.` Do not substitute a general
@@ -62,9 +79,10 @@ Playwright CLI runner, copied cookies, or a new login.
    clean.
 7. Record the verbatim response and verify the completed batch.
 
-If the selected Chrome profile or `/u/N/` account is not already authenticated,
-stop and ask the user to select the intended existing session. Do not sign in or
-switch to another account implicitly.
+If a planned Chrome profile or `/u/N/` account is not already authenticated,
+record that it is unavailable and continue with another authorized existing
+session. Ask the user only when no usable authorized session remains. Do not
+start a new login.
 
 ### OpenAI, Microsoft, and Meta Web
 
@@ -110,8 +128,9 @@ session continuity, not permission to retry a refused batch on another route.
 Use `check-openai` with one explicit upload acknowledgement. Keep named API keys
 as `OPENAI_API_KEY_1`, `OPENAI_API_KEY_2`, and `OPENAI_API_KEY_3` in the local `.env`, and select
 only their variable names through an `openai-api` slot's `api_key_env`. Never
-print a key, copy one into a slot or manifest, or fall back automatically to a
-second key. API slots use a direct SDK transport that ignores environment proxy
+print a key or copy one into a slot or manifest. Continue through authorized
+named API slots according to the bounded account plan above; keep a separate
+batch for each. API slots use a direct SDK transport that ignores environment proxy
 settings. The current adapter is image-only.
 
 ### Microsoft API

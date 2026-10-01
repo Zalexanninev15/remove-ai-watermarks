@@ -266,11 +266,22 @@ API slot must name its account or project and cannot name a browser profile. The
 tool records the network route that the operator has already established.
 Non-Google Web slots may name `proxy_url_env`; Playwright reads the secret proxy
 URL from that environment variable without writing or logging it. The tool does
-not rotate accounts or networks, retry through another IP after throttling, or
-merge sessions. Record a throttled response as `refused`; choosing another
-authorized slot is a separate operator decision and a separate batch. This
-preserves per-account and per-IP history without turning provider limits into an
-automatic evasion mechanism.
+not merge sessions or automatically change network routes. Account continuation
+is orchestrated by the skill, not by an individual adapter call. A request to
+verify a bounded set of files with a provider covers its configured account slots
+unless the operator restricts the account scope. Identify the finite set of
+available authenticated slots before starting and prepare one immutable batch
+per slot. Record quota refusals as `refused` and service failures according to
+their actual response, leave remaining rows in that slot unsubmitted, and
+continue automatically with the next authorized slot. Do not request permission
+again for files or accounts already covered by the task.
+
+Submit each frozen artifact at most once per slot in that pass. Keep every
+verbatim refusal, inconclusive reply, and disagreement between accounts. Stop
+when the planned checks finish or no authorized usable slot remains, and report
+unsubmitted rows. A new login, another provider, a new network route, or a new
+pass after the bounded plan is exhausted needs authorization unless already
+requested. Candidate pixels remain frozen throughout account continuation.
 
 Each `openai-api` slot must name exactly one `api_key_env`. Put the corresponding
 values in the gitignored local `.env`, never in the slot JSON:

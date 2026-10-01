@@ -675,7 +675,38 @@ too-small edit. The unchanged source and square crop control were negative.
 The four AI exports all carried Google Photos C2PA before stripping, so that
 manifest shape does not distinguish a detectable watermark from an inconclusive
 small edit. Indeterminate is not evidence of absence. Each operation has one
-export, with no repetitions; a genuinely small Magic Eraser mask remains untested.
+export; a genuinely small photographic Magic Eraser mask remains untested.
+A later same-day repeat of the small-removal bytes was explicitly quota-refused before any new
+watermark verdict. The recoloring repeat was left unsubmitted after that refusal,
+so neither original indeterminate outcome changed. A follow-up iOS capture
+attempt again expanded the small-object selection to the foreground, including
+in `Refine selection`; it was cancelled without saving a new export.
+A separate synthetic control then isolated a small red disk on a 2048 x 2048
+gray image. The real iOS Magic Eraser selected the disk and saved a separate
+copy with valid C2PA signature and asset binding. Against the downloaded Photos
+source, 7,399 pixels (0.1764%) differed by more than three RGB channel levels,
+inside a 98 x 98 bounding box. Lower-level differences extended across the
+image, so this measures visible change, not the internal mask. The Photos source
+download also differed from the locally generated JPEG; the downloaded source
+is the comparison baseline. After the operator authorized multiple existing
+accounts, two additional authenticated sessions checked the same four frozen
+uploads: small photographic removal, recoloring, synthetic source, and tiny
+Magic Eraser export. Both four-row batches passed complete hash verification;
+neither session quota-refused. The first returned `not_detected` for small
+removal and the synthetic source, and `indeterminate` for recoloring and the
+tiny export. The second returned `indeterminate` for all four. Both tiny-export
+replies cited insufficient image detail; the second also gave that reason for
+the synthetic source. A flat control therefore cannot isolate the effect of
+edit size on verification. Small photographic removal now has one negative and
+two inconclusive observations, including the original check; recoloring has
+three inconclusive observations. Preserve the earlier quota refusal separately.
+The additional sessions used their existing Flash and Pro modes respectively,
+so the discrepancy is not attributable to account identity alone. These
+bounded checks establish observed outcomes, not repeatability or watermark
+absence. Further photographic tiny Magic Eraser captures and verification
+retries for these inconclusive small edits were deferred by the maintainer on
+2026-10-01. Resume only on an explicit request; the observations remain valid
+as recorded, with their uncertainty unresolved.
 Private files and hash-bound oracle records remain outside the public repository.
 The Google Photos web editor is outside that rule: it has no generative tool and
 writes no Content Credentials, and Enhance, Sky and crop edits made there carried

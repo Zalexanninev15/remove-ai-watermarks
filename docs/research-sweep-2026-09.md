@@ -163,7 +163,10 @@ This page is an index. Each finding lives in its canonical page.
   (repeated by remover blogs; Kuaishou is not in Google's adopter list),
   Hailuo pixel watermarks, and platforms stripping C2PA on upload. None is used
   by the library.
-- **Google Photos small edits (six-file oracle check complete).** On
+- **Google Photos small edits (further work deferred, 2026-10-01).** The
+  maintainer deferred further photographic tiny Magic Eraser captures and
+  verification retries for the inconclusive small edits. Resume only on an
+  explicit request; retain the existing evidence and uncertainty. On
   2026-09-30, iPhone Mirroring successfully exposed the iOS
   editing toolbar. One source and five separate copies were captured: a large
   Magic eraser edit, a small removal through `Help me edit`, a small color
@@ -181,10 +184,15 @@ This page is an index. Each finding lives in its canonical page.
   stripped without changing decoded pixels. All six settled replies were
   recorded, one file per new chat. No quota refusal occurred and no request was
   repeated. The Photos-specific report caveat now names the inconclusive small
-  edits rather than describing every tested AI edit as positive. A tiny Magic
-  eraser mask remains unmeasured: its automatic selection expanded to a
+  edits rather than describing every tested AI edit as positive. A tiny photographic
+  Magic Eraser mask remains unmeasured: its automatic selection expanded to a
   large region, so the small removal used `Help me edit` instead. One source and
   one export per operation cannot establish representative or repeatable behavior.
+  Follow-up checks across two additional accounts left recoloring and the
+  synthetic tiny Magic Eraser control inconclusive; small removal returned one
+  negative and one inconclusive reply. The quota refusal, synthetic capture,
+  pixel comparison, mode caveat, and hash-bound outcomes are recorded in
+  [synthid.md](synthid.md).
 - **Captures blocked by region or device.** Doubao, Jimeng, Samsung. Higgsfield,
   Runway and Dreamina were captured on paid plans on 2026-09-24.
 
