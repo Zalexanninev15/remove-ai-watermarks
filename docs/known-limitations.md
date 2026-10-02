@@ -179,9 +179,12 @@ fresh-font and silhouette variants visibly changed typography. The higher-fideli
 and line geometry. It builds its donor internally but still requires an independently
 clean global anchor. Automatic OCR and line-box proposals are not reliable enough to
 remove those requirements, and exact oracle results do not establish a general mask,
-seed, runtime, or provider operating range. Qwen-Image-2.0 is hosted-only and exposes
-no equivalent low-strength denoise control. Exact experiments, controls, and pass
-rates are kept in
+seed, runtime, or provider operating range. Qwen-Image-2.0 is hosted-only. Qwen-Image-2.1
+(issue #111) has open weights, but its Diffusers pipeline uses `image=` only as
+reference conditioning and starts the target latents from noise, with no `strength`
+or latent noise-mask input. Its Qwen Research License also limits the weights to
+non-commercial research and evaluation, so it is not a supported-profile candidate.
+Exact experiments, controls, and pass rates are kept in
 [`text-protection-research.md`](text-protection-research.md) and the
 [`fidelity` evaluation record](../data/evaluations/fidelity/README.md).
 
