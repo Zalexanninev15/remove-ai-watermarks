@@ -29,7 +29,7 @@ Do not add advisory ignores or suppress the scanner's exit status. Run and
 report Ruff, Pyright scoped to `src/`, and tests separately when security blocks
 the gate.
 
-Rechecked on 2026-09-10 against the locked versions and the advisory sources:
+Rechecked on 2026-10-02 against the locked versions and the advisory sources:
 
 - `lightning` and `pytorch-lightning`, pulled by the optional `trustmark`
   extra, are pinned to 2.6.6. That release clears PYSEC-2026-3624 and
@@ -37,18 +37,19 @@ Rechecked on 2026-09-10 against the locked versions and the advisory sources:
 - `accelerate`, required by the diffusion stack, is affected by
   [GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79)
   and PYSEC-2026-3804. The sharded-checkpoint loader accepts unsafe
-  `weight_map` paths; neither advisory lists a patched release. 1.15.0 is
-  on PyPI and is outside the advisory's `<= 1.14.0` range, but its
+  `weight_map` paths; neither advisory lists a patched release. The lock
+  carries 1.15.0, which is outside the advisory's `<= 1.14.0` range, so the
+  scanner no longer blocks the gate. Its
   `load_checkpoint_in_model` still joins `weight_map` entries with no
   containment check, and the sanitizer PRs
   ([#4138](https://github.com/huggingface/accelerate/pull/4138),
-  [#4214](https://github.com/huggingface/accelerate/pull/4214)) did not
-  land. Do not bump solely to silence the scanner. The project has no
+  [#4214](https://github.com/huggingface/accelerate/pull/4214)) were closed
+  without merging. Do not treat the passing scan as a fix. The project has no
   direct call to `load_checkpoint_in_model` or
   `load_checkpoint_and_dispatch`, but this does not prove indirect
   model-loading paths are unaffected.
 
-Before carrying the remaining block forward, rerun `uvx uv-secure uv.lock` and check
+When a new block appears, or before carrying one forward, rerun `uvx uv-secure uv.lock` and check
 PyPI for a fixed release. Upgrade a fixed package with
 `uv lock --upgrade-package <package>` and rerun the gate. Removing the current
 dependency would remove a supported optional feature, so that is not a
@@ -97,6 +98,11 @@ oldest and newest minors, and a separate job that installs ffmpeg on Ubuntu to
 run the full-clip video test. Diffusion and model-running tests skip in that
 matrix; metadata, identification, visible removal, the DWT-DCT decoder, and the
 OpenCV eraser remain covered across operating systems.
+
+A separate `security` job runs the `maintain.sh` lockfile scan, so an advisory
+without a released fix turns `main` red; see
+[Known security-gate blocks](#known-security-gate-blocks). Vulnerability
+reporting is described in [`SECURITY.md`](../SECURITY.md).
 
 Keep `uv.lock` compatible with `uv sync --frozen`. Dependency pull-request checks use GitHub's merge result against current `main`; if `main` moves, merge it locally and rerun the full gate because a newer linter can expose stale directives in later code.
 

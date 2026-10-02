@@ -8,8 +8,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
-GATE = Path(__file__).resolve().parents[1] / "maintain.sh"
+ROOT = Path(__file__).resolve().parents[1]
+GATE = ROOT / "maintain.sh"
 BASH = shutil.which("bash")
 pytestmark = pytest.mark.skipif(os.name != "posix" or BASH is None, reason="The maintenance entry point requires Bash")
 
@@ -65,3 +67,13 @@ def test_security_exit_status_controls_the_gate(tmp_path, scanner_output, scanne
     else:
         assert result.returncode == 0
         assert calls[-1] == "uv run pytest -n auto"
+
+
+def test_ci_runs_the_gate_security_scan_unweakened():
+    scan = next(line for line in GATE.read_text().splitlines() if line.startswith("uvx uv-secure"))
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    job = workflow["jobs"]["security"]
+    runs = [step["run"].strip() for step in job["steps"] if "run" in step]
+    assert runs == [scan]
+    assert not job.get("continue-on-error")
+    assert not any(step.get("continue-on-error") for step in job["steps"])

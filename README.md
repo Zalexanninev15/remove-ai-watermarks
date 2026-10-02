@@ -571,7 +571,8 @@ bash maintain.sh
 ```
 
 See [module internals](docs/module-internals.md) before changing a subsystem
-with documented invariants.
+with documented invariants. Report vulnerabilities as described in
+[SECURITY.md](SECURITY.md).
 
 ## License
 

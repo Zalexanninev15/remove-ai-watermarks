@@ -29,6 +29,19 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check
 
+  security:
+    name: lockfile vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      # Policy and triaged blocks: docs/development.md "Known security-gate blocks".
+      - name: Scan uv.lock with uv-secure
+        run: uvx uv-secure uv.lock
+
   test:
     name: test ${{ matrix.os }} py${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}

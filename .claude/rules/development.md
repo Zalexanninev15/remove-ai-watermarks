@@ -81,7 +81,8 @@ Run `bash maintain.sh` from the repository root. The authoritative type gate is 
 
 The security scanner's exit status is authoritative, including a failure after a success
 message. `tests/test_maintenance.py` checks clean, vulnerable, and broken scanner
-runs through the real shell entry point. Recheck unresolved advisories using the
+runs through the real shell entry point, and pins the CI `security` job to the
+same scanner line with no `continue-on-error`. Recheck unresolved advisories using the
 procedure in `docs/development.md`; do not revive the old text-matching bypass.
 
 Boundary modules for cv2, Torch, and Diffusers may carry narrow per-file relaxations for unknown third-party types. Keep pure-logic files strict, preserve the local piexif stub, and fix real errors before widening a pragma.
