@@ -743,8 +743,11 @@ Key contracts:
   A.1 string (`"Label":"1","ContentProducer":"...","ProduceID":"..."`) under the
   default SM2 user ID, and MiniMax's `LabelMataData` spelling is accepted beside
   the guide's `Md`. Only the label signature is checked: MiniMax's binding
-  signature also verifies, but no verdict reads it, and its content hash is not
-  recomputed because MiniMax names no `CntSel`. The key travels in the file, so
+  signature also verifies, but no verdict reads it. The guide's appendix A.2
+  defines `DFT` for non-JPEG/PNG files as all bytes except the metadata label;
+  MiniMax names no `CntSel`, and measured whole-file, direct DFT byte-range,
+  metadata-box, and media-payload interpretations do not reproduce its content
+  hash. The key travels in the file, so
   only a key pinned in `TC260_PRODUCERS` (the source of `TC260_SIGNING_KEYS`)
   names a signer, and a pinned signer
   is checked with the pinned point whatever parity the file claims; an unpinned

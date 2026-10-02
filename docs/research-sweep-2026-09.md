@@ -33,22 +33,28 @@ This page is an index. Each finding lives in its canonical page.
 | Dependencies | TrustMark extra on every supported Python (`trustmark>=0.9.2`) | [installation.md](installation.md) |
 | Live captures | Gemini Omni, Grok, Vidu, Wan, Apple, Google Photos, Nano Banana 2 Lite and Gemini Omni Flash through the API; Runway, Higgsfield and Dreamina | [watermarking-landscape.md](watermarking-landscape.md#live-captures-2026-09-23-and-2026-09-24) |
 
-## Open items
+## Follow-up status
 
-- **Google Photos Reimagine manifests.** Magic Editor, and so Reimagine, is not
-  offered in Google Photos on iOS, so no Reimagine file is captured. The
+The original follow-up list now mixes completed experiments, deliberately
+excluded claims, and acquisition gaps. Each row below names its current status
+as of 2026-10-01 so this section can serve as the research backlog without
+discarding the measured results.
+
+- **Closed - Google Photos Reimagine manifests.** Magic Editor, and so
+  Reimagine, is not offered in Google Photos on iOS, so no Reimagine file is
+  captured. The
   question it was meant to answer is settled without one: Google's checker found
   SynthID in all four Photos AI edits tested on 2026-09-25, none of which
   records SynthID in its manifest.
-- **Vidu and Wan marks on more samples.** Both are registered from one real
-  export each (`vidu` video, `wan` image); their gates are provisional until a
+- **Open - Vidu and Wan marks on more samples.** Both are registered from one
+  real export each (`vidu` video, `wan` image); their gates are provisional until a
   wider cohort is measured, and a Wan video label is not yet captured. Public
   Vidu feed videos (2026-09-26) carry the TC260 label naming ShengShu, and one
   names Tongyi Yunqi as producer with Vidu as propagator, but none shows the
   visible `Vidu` mark; Wan's public demo videos show no mark either. Both marks
   appear only on account downloads.
-- **TC260 practice guides.** The audio placements from TC260-PG-202510A are
-  now read (the guide PDFs load in a browser from
+- **Partially complete - TC260 practice guides.** The audio placements from
+  TC260-PG-202510A are now read (the guide PDFs load in a browser from
   `tc260.org.cn/tc260/sjzn/list.shtml`, not to scripted requests). The text-file
   guide (TC260-PG-20258A) covers documents this image and video tool does not
   process. The security-protection guide (TC260-PG-202511A) records a
@@ -66,15 +72,25 @@ This page is an index. Each finding lives in its canonical page.
   point; changing one `ProduceID` digit fails it. MiniMax's own spellings depart
   from the guide: `TBSData.Type` is `LabelMataData` (the guide's `Md`) and
   `Binding` with `BType` `0` (its `Bnd`); the second signature verifies over the
-  compact JSON of the `Bindings` entry, also on all four. That entry's SM3
-  content hash matched neither the whole file nor the file without its label,
-  and it names no `CntSel`, so the content binding is unverified. Other producers fill the same
+  compact JSON of the `Bindings` entry, also on all four. TC260-PG-202511A
+  appendix A.2 was re-read from the
+  [official PDF](https://www.tc260.org.cn/tc260/sjzn/202508/63ab55a3265f45c7865e9b8be15d4a29/files/dc379ec776f94abc8f1806affa1cda35.pdf)
+  on 2026-10-01. MiniMax omits its `CntSel`, and none of the guide-derived
+  byte selections reproduced its SM3 content hash on four measured videos, so
+  the content binding remains unverified
+  ([module internals](module-internals.md)). Other producers fill the same
   fields with opaque vendor strings (Qwen a base64 digest, Vidu 32 hex digits,
   Wan and HappyHorse `L-`/`K-` prefixed values), not `SecurityData`. The key sits
   in the file it signs, so a check proves authenticity only against a pinned
   MiniMax key. `identify` now verifies it with a built-in SM3/SM2 and a pinned
-  MiniMax key ([module internals](module-internals.md)).
-- **Experiments.** Chroma restoration after regeneration (arXiv:2508.21072) was
+  MiniMax key. The remaining work is
+  MiniMax content-binding verification if its byte-selection rule becomes known,
+  and Honor's unsupported RSA/content form if an original export and signing
+  contract become available.
+- **Partially complete - experiments.** Five of the six follow-ups are closed:
+  Z-Image-Turbo, Perth and PixelSeal, re-watermarking, VACE/ROSE, and newer
+  frozen-backbone probes. Chroma
+  restoration after regeneration (arXiv:2508.21072) was
   measured on 2026-09-27 and is not shipped: transplanted source chroma drew one
   explicit "inconclusive" and two unclear Gemini answers where the untouched
   outputs were all clean, and ghosts redrawn objects
@@ -126,12 +142,20 @@ This page is an index. Each finding lives in its canonical page.
   profile; retain its harness and local evidence for future comparison only.
   The existing source-conditioned Z-Image face-repair stage remains part of
   `qwen-zimage`, `sdxl-zimage`, and `chroma-zimage`.
-  Still open: linear probes on newer frozen backbones for `classify` and RAVEN
-  view-synthesis removal
-  (arXiv:2601.08832, no code released as of 2026-09-24).
+  The pre-registered modern-backbone campaign found that neither frozen
+  SigLIP2 Base nor PE-Core B could match the production model's combined photo,
+  AI, and FLUX constraints, so the replacement hypothesis is closed
+  ([classifier research](ai-generated-image-classifiers.md#modern-frozen-backbone-campaign-closed-2026-09-27)).
+  Only RAVEN view-synthesis removal remains blocked. RAVEN's
+  [official repository](https://github.com/fahadshamshad/raven-watermark-removal)
+  now exists, but its 2026-08-08 README is still a release placeholder: the
+  authors say they will publish code after their SynthID testing and Google
+  Security Bounty submission. There is no implementation to evaluate as of
+  2026-10-01 (arXiv:2601.08832).
   MiniMax-Remover (CC-BY-NC-4.0 weights) and ProPainter (S-Lab License,
-  non-commercial) are excluded on license.
-- **New C2PA signers without a vendor row.** The
+  non-commercial) are deliberately excluded on license and are not backlog
+  items.
+- **Open - new C2PA signers without a vendor row.** The
   [C2PA conformance list](https://github.com/c2pa-org/conformance-public/blob/main/conforming-products/conforming-products-list.json)
   names generator certificates `Amazon Bedrock`, `Getty Images
   AI-Generated Image` and `AI-Modified Image` (and the iStock pair), `Jasper`,
@@ -148,7 +172,7 @@ This page is an index. Each finding lives in its canonical page.
   carrying C2PA: their marketing and model-page images are unsigned. A vivo
   X300 camera capture carries a vivo device manifest (`digitalCapture`) that
   the bundled reader cannot open (`unknown algorithm`).
-- **Chinese phone galleries.** Huawei's help pages say the Xiaoyi photo-edit AI
+- **Open - Chinese phone galleries.** Huawei's help pages say the Xiaoyi photo-edit AI
   watermark can be switched off; vivo's Album setting is already covered.
   The public-web follow-up below found Honor YOYO metadata and additional
   primary-source labeling evidence, but not a controlled gallery export set. A live
@@ -159,11 +183,12 @@ This page is an index. Each finding lives in its canonical page.
   of an unedited control, an ordinary crop, and a generative edit are still needed
   per app before selecting an AI attribution rule. Record the device, OS/app
   version, region, operation, and original download path with each sample.
-- **Claims not supported by a primary source.** Kling embedding SynthID
+- **Closed - claims not supported by a primary source.** Kling embedding SynthID
   (repeated by remover blogs; Kuaishou is not in Google's adopter list),
   Hailuo pixel watermarks, and platforms stripping C2PA on upload. None is used
   by the library.
-- **Google Photos small edits (further work deferred, 2026-10-01).** The
+- **Partially complete - Google Photos small edits (further work deferred,
+  2026-10-01).** The
   maintainer deferred further photographic tiny Magic Eraser captures and
   verification retries for the inconclusive small edits. Resume only on an
   explicit request; retain the existing evidence and uncertainty. On
@@ -193,8 +218,13 @@ This page is an index. Each finding lives in its canonical page.
   negative and one inconclusive reply. The quota refusal, synthetic capture,
   pixel comparison, mode caveat, and hash-bound outcomes are recorded in
   [synthid.md](synthid.md).
-- **Captures blocked by region or device.** Doubao, Jimeng, Samsung. Higgsfield,
-  Runway and Dreamina were captured on paid plans on 2026-09-24.
+- **Partially complete - direct captures blocked by region or device.** Direct,
+  controlled captures remain blocked for Doubao, Jimeng, and Samsung. The
+  public-web follow-up below later found one real marked Doubao video and
+  validated its visible mark and TC260 metadata, but the file remains local
+  because publication has not been cleared; it is not a controlled account
+  capture or a redistributable fixture. Higgsfield, Runway, and Dreamina were
+  captured on paid plans on 2026-09-24.
 
 ### Public-web sample search, 2026-10-01 UTC
 
@@ -251,10 +281,16 @@ provider exports. No third-party photograph was added to tracked fixtures.
   [Getty's generator page](https://www.gettyimages.com/ai/generation),
   [iStock's generator page](https://www.istockphoto.com/ai/generation), and
   [Reface's product site](https://reface.ai/) did not carry locally recognized
-  C2PA. Jasper explicitly distinguishes input/mask/output examples, but an
-  unsigned web derivative cannot establish its signed export's manifest shape.
+  C2PA. A 2026-10-01 recheck of Jasper's current official Image landing page
+  reached its pre-rendered endpoint outputs directly and again found no C2PA.
+  Jasper explicitly distinguishes input/mask/output examples, but an unsigned
+  web derivative cannot establish its signed export's manifest shape.
   Conformance certificates alone still do not justify fabricating that shape.
-- **Visible-image/video gaps remain.** The downloaded RunningHub workflow
+- **Visible-image/video provider-original gaps remain.** Every registered mark
+  already has a publication-safe synthetic detector fixture in the
+  [visible-mark gallery](../data/fixtures/visible/README.md); the sample ledgers
+  now point to those fixtures and distinguish them from provider evidence. The
+  downloaded RunningHub workflow
   illustrations are explanatory/branding assets, not verified output examples;
   Liblib API documentation's cat illustration has no visible historical wordmark.
   A public [Inkpainting model page](https://www.liblib.art/modelinfo/2acd393c23924ff9b5363c9c1ec9129f)

@@ -1597,6 +1597,38 @@ Local reproducibility artifacts are under
 `contamination-scan-2026-08-26`, and `taxonomy-continuation-clean-2026-08-26`
 run directories.
 
+## Modern frozen-backbone campaign closed, 2026-09-27
+
+A second pre-registered representation campaign tested exact-revision,
+Apache-2.0 frozen vision backbones with universal ridge heads against the same
+product contract. The candidates were `google/siglip2-base-patch16-224` at
+revision `75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2` and
+`facebook/PE-Core-B16-224` at revision
+`a16450b46fef32363459920c2685a1b4ef13dcd9`. The protocol was frozen before
+inference and used 28,743 unique source images. Its comparison cells contained
+1,873 AI-test images, 3,000 fresh Open Images photographs, 24 Kodak images, and
+300 FLUX images.
+
+| Model at its frozen operating point | AI test | Fresh photo false positives | Kodak false positives | FLUX |
+| --- | ---: | ---: | ---: | ---: |
+| Production Model 1 baseline | 1,676/1,873 (89.5%) | 35/3,000 (1.17%) | 0/24 | 256/300 (85.3%) |
+| SigLIP2 universal ridge | 1,602/1,873 (85.5%) | 74/3,000 (2.47%) | 0/24 | 125/300 (41.7%) |
+| PE-Core B universal ridge | 1,715/1,873 (91.6%) | 86/3,000 (2.87%) | 0/24 | 170/300 (56.7%) |
+
+SigLIP2 failed the AI-test, fresh-photo, and FLUX gates. PE-Core improved the
+AI-test cell but failed the fresh-photo and FLUX gates. Matching the baseline's
+exact 35-false-positive photo budget after the fact did not recover the lost
+coverage: SigLIP2 reached 1,505/1,873 AI and 98/300 FLUX, PE-Core universal
+reached 1,625/1,873 and 133/300, and PE-Core photo-only reached 1,709/1,873 and
+97/300. No threshold matched the baseline photo budget, AI coverage, and FLUX
+coverage simultaneously.
+
+The bounded newer-backbone hypothesis is therefore closed as a Model 1
+replacement. Keep `clip-l-ft.pt`, its ONNX graph, hashes, and Hub revision
+unchanged. Reproducibility artifacts are local under
+`.local-eval/synthid/ai-photo-2026-08-22/modern-representation-campaign-2026-09-27/`;
+the campaign did not enter the publication stage.
+
 ### Wild extras, not SynthID
 
 | Hypothesis | 2026-08-23 | Use |
