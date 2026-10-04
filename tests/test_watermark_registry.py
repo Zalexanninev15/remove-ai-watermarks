@@ -22,6 +22,8 @@ class TestCatalog:
             "wan",
             "kling",
             "yuanbao",
+            "dola",
+            "workbuddy",
             "samsung",
             "runninghub",
             "baidu",
@@ -117,6 +119,8 @@ class TestScan:
             "wan",
             "kling",
             "yuanbao",
+            "dola",
+            "workbuddy",
             "samsung",
             "runninghub",
             "baidu",
@@ -722,11 +726,25 @@ class TestPillSuppressors:
             m.key for m in reg.known_marks() if m.manufacturer == pill.manufacturer and m.product != pill.product
         }
         assert reg._pill_suppressors() == expected
-        assert expected == {"doubao"}
+        assert expected == {"dola", "doubao"}
 
     def test_other_manufacturers_do_not_suppress_the_pill(self):
         assert reg._keep_pill({"qwen"}, provenance=frozenset({"jimeng"}), footprint_flat=1.0)
         assert reg._keep_pill({"liblib", "jimeng"}, provenance=frozenset(), footprint_flat=1.0)
+
+    def test_verified_label_bypasses_texture_only_with_jimeng_provenance(self):
+        assert reg._keep_pill(
+            {"jimeng_pill"},
+            provenance=frozenset({"jimeng"}),
+            footprint_flat=False,
+            verified_label=True,
+        )
+        assert not reg._keep_pill(
+            {"jimeng_pill"},
+            provenance=frozenset(),
+            footprint_flat=False,
+            verified_label=True,
+        )
 
     def test_pill_survives_gemini_and_samsung(self):
         """Neither is a TC260 labeler, and neither can put "jimeng" into provenance,

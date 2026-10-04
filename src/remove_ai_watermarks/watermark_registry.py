@@ -24,13 +24,15 @@ Entries:
   - ``qwen`` -- Alibaba Cloud Qwen "千问AI生成" text or three-lobe symbol, bottom-right.
   - ``kling`` -- Kuaishou Kling AI "可灵AI 3.0" / "KlingAI 3.0" strip, bottom-right.
   - ``yuanbao`` -- Tencent Yuanbao "元宝 / AI生成" two-line mark, bottom-right.
-  - ``samsung`` -- Samsung Galaxy AI "Contenuti generati dall'AI" strip, bottom-left.
-  - ``jimeng_pill`` -- Jimeng-basic "AI生成" pill, top-left (capture-less).
+  - ``dola`` -- ByteDance Dola "Dola AI" image disclosure, bottom-right.
+  - ``workbuddy`` -- Tencent WorkBuddy "AI生成 / WORKBUDDY" disclosure, bottom-right.
+  - ``samsung`` -- Samsung Galaxy AI Italian or Korean disclosure, bottom-left.
+  - ``jimeng_pill`` -- Jimeng-basic "AI生成" pill or solid label, top-left.
   - ``runninghub`` -- RunningHub "RunningHub AI生成" text, top-left (gray front-end).
   - ``baidu`` -- Baidu "百度 AI生成" text + white tag, bottom-right.
   - ``liblib`` -- LiblibAI "LiblibAI" wordmark, bottom-center.
   - ``liblib_pill`` -- LiblibAI compact "AI生成" pill, top-left.
-  - ``microsoft`` -- one measured Microsoft white AI-badge variant, top-right.
+  - ``microsoft`` -- measured Microsoft white AI badge or beige text pill, top-right.
   - ``generic_ai_label`` -- brand-less bare "AI生成" TC260 label (no vendor wordmark),
     bottom-right; the fallback for a compliance stamp not tied to any tuned mark above.
   - ``openart`` -- OpenArt "OpenArt" wordmark (bowtie/infinity icon + brand name),
@@ -448,6 +450,8 @@ _ENGINE_CLASS: dict[str, tuple[str, str]] = {
     "jimeng": ("jimeng_engine", "JimengEngine"),
     "qwen": ("qwen_engine", "QwenEngine"),
     "kling": ("kling_engine", "KlingEngine"),
+    "dola": ("dola_engine", "DolaEngine"),
+    "workbuddy": ("workbuddy_engine", "WorkBuddyEngine"),
     "yuanbao": ("yuanbao_engine", "YuanbaoEngine"),
     "samsung": ("samsung_engine", "SamsungEngine"),
     "jimeng_pill": ("pill_engine", "PillEngine"),
@@ -641,29 +645,44 @@ def _text_mark(
     )
 
 
-# ── Capture-less mark: the Jimeng-basic "AI生成" pill (top-left) ──
-# Detection is edge-NCC of a synthetic silhouette; the mask is a fixed top-left
-# geometry box (see pill_engine). Removal is the same localize -> fill as the rest.
+# ── Jimeng-basic "AI生成" pill or solid label (top-left) ──
+# The weak outline uses synthetic edge-NCC and fixed geometry. The verified solid
+# label uses its own contrast template and detector-aligned mask (see pill_engine).
 def _pill_detect(image: NDArray[Any], *, provenance: bool = False) -> MarkDetection:
-    del provenance  # the pill detector is provenance-independent; its relaxation lives entirely in _keep_pill
-    d = _engine("jimeng_pill").detect(image)
-    return MarkDetection("jimeng_pill", "Jimeng AI生成 pill", "top-left", d.detected, d.confidence, d.region)
+    d = _engine("jimeng_pill").detect(image, provenance=provenance)
+    return MarkDetection(
+        "jimeng_pill",
+        "Jimeng AI生成 pill",
+        "top-left",
+        d.detected,
+        d.confidence,
+        d.region,
+        engine_detection=d,
+    )
 
 
 def _pill_detect_both(image: NDArray[Any]) -> tuple[MarkDetection, MarkDetection]:
-    # The pill detector is provenance-independent (`_pill_detect` discards the flag), so
-    # one call answers both levels. MarkDetection is frozen, so sharing it is safe.
-    d = _pill_detect(image)
-    return d, d
+    strict, relaxed = _engine("jimeng_pill").detect_both(image)
+
+    def wrap(detection: Any) -> MarkDetection:
+        return MarkDetection(
+            "jimeng_pill",
+            "Jimeng AI生成 pill",
+            "top-left",
+            detection.detected,
+            detection.confidence,
+            detection.region,
+            engine_detection=detection,
+        )
+
+    return wrap(strict), wrap(relaxed)
 
 
 def _pill_mask(
     image: NDArray[Any], *, force: bool = False, detection: MarkDetection | None = None
 ) -> NDArray[Any] | None:
-    # The pill mask is a fixed top-left geometry box, independent of the detection;
-    # accepted for the uniform _mask signature.
-    del detection
-    return _engine("jimeng_pill").footprint_mask(image, force=force)
+    engine_detection = detection.engine_detection if detection is not None else None
+    return _engine("jimeng_pill").footprint_mask(image, force=force, detection=engine_detection)
 
 
 def _pill_features(image: NDArray[Any]) -> dict[str, float]:
@@ -731,6 +750,24 @@ _REGISTRY: tuple[KnownMark, ...] = (
         "bottom-right",
         platform="Tencent Yuanbao (visible 元宝 / AI生成 mark detected)",
         manufacturer="tencent",
+    ),
+    _text_mark(
+        "dola",
+        "Dola AI image wordmark",
+        "bottom-right",
+        platform="Dola AI (visible Dola AI disclosure)",
+        manufacturer="bytedance",
+        label_regime=None,
+        provenance_signals=(),
+    ),
+    _text_mark(
+        "workbuddy",
+        "AI生成 / WORKBUDDY disclosure",
+        "bottom-right",
+        platform="WorkBuddy (visible AI content disclosure)",
+        manufacturer="tencent",
+        label_regime=None,
+        provenance_signals=(),
     ),
     # Samsung Galaxy AI is a device editing marker (samsung_genai), not a TC260 label.
     _text_mark(
@@ -940,8 +977,14 @@ def _pill_suppressors() -> set[str]:
     return {m.key for m in _REGISTRY if m.manufacturer == pill.manufacturer and m.product != pill.product}
 
 
-def _keep_pill(keys: set[str], *, provenance: frozenset[str], footprint_flat: bool) -> bool:
-    """Whether to auto-remove the capture-less 'AI生成' pill given the fired marks.
+def _keep_pill(
+    keys: set[str],
+    *,
+    provenance: frozenset[str],
+    footprint_flat: bool,
+    verified_label: bool = False,
+) -> bool:
+    """Whether to auto-remove the ``AI生成`` pill or verified label.
 
     Pure decision (the flatness feature is precomputed at perception time and passed
     in). The pill detector is weak and metadata/intent confirms the platform, not pill
@@ -950,23 +993,24 @@ def _keep_pill(keys: set[str], *, provenance: frozenset[str], footprint_flat: bo
       * bottom-right "★ 即梦AI" wordmark fired -> ~94% precise, and it survives
         metadata-STRIPPED images: remove the pill unrestricted;
       * TC260 metadata confirms Jimeng (``"jimeng" in provenance``, no wordmark) -> remove ONLY when the
-        top-left footprint is flat enough for an invisible fill (``footprint_flat``),
-        so real flat-scene pills (and harmless flat false fires) are cleaned while the
-        damaging textured false fires are left untouched.
+        solid label template verifies the text, or when the weaker outline's top-left
+        footprint is flat enough for an invisible fill (``footprint_flat``). Real
+        flat-scene pills are cleaned while damaging textured false fires are left.
     A Doubao image is TC260 too but is not Jimeng-basic, so its mark suppresses the
-    pill. Marks from other TC260 manufacturers are unrelated and do not participate in
-    this ByteDance-family decision.
+    pill. The independently attributed LiblibAI pill also wins over the generic
+    ``AI生成`` label shape. Marks from other TC260 manufacturers are unrelated and do
+    not participate in this ByteDance-family decision.
     No confirmation at all -> never remove (blocks false fires on non-Jimeng content).
 
     The suppressor set is derived from the manufacturer and product fields rather than
     from the shared TC260 standard. Marks from Google, Samsung, or another TC260
     manufacturer cannot enable or veto this ByteDance-specific arm."""
-    if _pill_suppressors() & keys:
+    if "liblib_pill" in keys or _pill_suppressors() & keys:
         return False
     if "jimeng" in keys:
         return True
     if "jimeng" in provenance:
-        return footprint_flat
+        return footprint_flat or verified_label
     return False
 
 
@@ -990,6 +1034,8 @@ def _build_candidates(image: NDArray[Any]) -> list[Candidate]:
             continue
         strict, relaxed = m.detect_both(image)
         feats = m.features(image) if (strict.detected or relaxed.detected) else {}
+        if relaxed.engine_detection is not None and getattr(relaxed.engine_detection, "verified_label", False):
+            feats["verified_label"] = 1.0
         cands.append(
             Candidate(
                 m.key,
@@ -1010,7 +1056,7 @@ def decide(candidates: list[Candidate], context: Context) -> list[Decision]:
 
     All policy lives here, in one place: per-mark trust resolution (:func:`resolve_trust`,
     which needs the strict-detected siblings for ``auto`` cross-mark corroboration) and
-    the capture-less pill gate (:func:`_keep_pill`). No image, no I/O -- so it is unit-testable in isolation and
+    the Jimeng pill/label gate (:func:`_keep_pill`). No image, no I/O -- so it is unit-testable in isolation and
     the same decision drives every caller."""
     strict_keys = {c.key for c in candidates if c.detected_strict}
     fired: list[Decision] = []
@@ -1026,7 +1072,13 @@ def decide(candidates: list[Candidate], context: Context) -> list[Decision]:
     if "jimeng_pill" in keys:
         pill = next(d for d in fired if d.candidate.key == "jimeng_pill")
         flat = bool(pill.candidate.features.get("footprint_flat", 0.0))
-        if not _keep_pill(keys, provenance=context.provenance, footprint_flat=flat):
+        verified_label = bool(pill.candidate.features.get("verified_label", 0.0))
+        if not _keep_pill(
+            keys,
+            provenance=context.provenance,
+            footprint_flat=flat,
+            verified_label=verified_label,
+        ):
             fired = [d for d in fired if d.candidate.key != "jimeng_pill"]
     return fired
 

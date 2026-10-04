@@ -21,7 +21,7 @@ remove-ai-watermarks visible image.png --keep-metadata -o clean.png
 ```
 
 Image mark keys: `gemini`, `doubao`, `jimeng`, `qwen`, `wan`, `kling`, `yuanbao`,
-`samsung`, `runninghub`, `baidu`, `liblib`, `liblib_pill`, `microsoft`,
+`dola`, `workbuddy`, `samsung`, `runninghub`, `baidu`, `liblib`, `liblib_pill`, `microsoft`,
 `generic_ai_label`, `openart`, `jimeng_pill`. `wan` is new (since CLI 0.43.0). Default
 `--mark auto` removes every selected match. `microsoft` is the top-right AI
 badge, separate from the invisible InvisMark watermark on the same vendor's

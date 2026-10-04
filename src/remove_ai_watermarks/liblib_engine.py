@@ -170,7 +170,7 @@ class LibLibPillEngine:
     """Detect the compact top-left pill only when LiblibAI is corroborated."""
 
     def __init__(self) -> None:
-        self._pill = PillEngine()
+        self._pill = PillEngine(include_label=False)
 
     def _raw(self, image: NDArray[Any]) -> PillDetection:
         return self._pill.detect(image)

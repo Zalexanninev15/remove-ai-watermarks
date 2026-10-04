@@ -56,6 +56,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import cv2
+import numpy as np
 
 from remove_ai_watermarks import _text_mark_engine
 from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkDetection, TextMarkEngine
@@ -136,8 +137,12 @@ _CONFIG = TextMarkConfig(
 _LATIN_CONFIG = replace(
     _CONFIG,
     asset_name="kling_latin_alpha.png",
-    alpha_width_frac=0.095,
-    alpha_height_frac=0.028,
+    width_frac=0.22,
+    height_frac=0.07,
+    margin_x_frac=0.002,
+    margin_bottom_frac=0.002,
+    alpha_width_frac=0.14,
+    alpha_height_frac=0.032,
     ladder=(0.9, 1.0, 1.1),
     detect_ncc_threshold=0.40,
 )
@@ -153,12 +158,37 @@ def _glyph_silhouette() -> NDArray[Any] | None:
     return _text_mark_engine.glyph_silhouette(_CONFIG.asset_name)
 
 
-class KlingEngine(TextMarkEngine):
+class _KlingTextEngine(TextMarkEngine):
+    """Require glyph structure beyond a horizontal or vertical background edge."""
+
+    def _ladder_best(
+        self, image: NDArray[Any], loc: _text_mark_engine.TextMarkLocation
+    ) -> tuple[float, tuple[int, int, int, int] | None]:
+        score, box = super()._ladder_best(image, loc)
+        response = self._detect_response(image, loc)
+        silhouette = self._glyph_silhouette()
+        if box is None or response is None or silhouette is None:
+            return score, box
+        x, y, x1, y1 = box
+        patch = response[y : y1 + 1, x : x1 + 1].astype(np.float32)
+        template = cv2.resize(silhouette, (patch.shape[1], patch.shape[0]), interpolation=cv2.INTER_AREA)
+
+        def glyph_detail(array: NDArray[Any]) -> NDArray[Any]:
+            array = array.astype(np.float32)
+            return array - array.mean(axis=0, keepdims=True) - array.mean(axis=1, keepdims=True) + array.mean()
+
+        patch, template = glyph_detail(patch), glyph_detail(template)
+        denominator = float(np.linalg.norm(patch) * np.linalg.norm(template))
+        detail_score = float((patch * template).sum()) / denominator if denominator > 1e-6 else 0.0
+        return max(0.0, min(score, detail_score)), box
+
+
+class KlingEngine(_KlingTextEngine):
     """Detect/localize Kling AI's CJK and Latin 3.0 marks (locate -> mask -> fill)."""
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
-        self._latin = TextMarkEngine(_LATIN_CONFIG)
+        self._latin = _KlingTextEngine(_LATIN_CONFIG)
 
     def detect(self, image: NDArray[Any], *, provenance: bool = False) -> TextMarkDetection:
         """Return the strongest CJK or Latin Kling wordmark verdict."""
@@ -195,14 +225,15 @@ class KlingEngine(TextMarkEngine):
             return super().footprint_mask(image, force=force, dilate=dilate, detection=detection)
 
         det = detection if detection is not None else self.detect(image)
-        legacy = super().footprint_mask(image, force=False, dilate=dilate, detection=det)
+        if not det.detected:
+            return None
+        engine = self._latin if det.template_asset == _LATIN_CONFIG.asset_name else self
+        legacy = TextMarkEngine.footprint_mask(engine, image, force=False, dilate=dilate, detection=det)
         radius = _FOOTPRINT_DILATE if dilate is None else max(0, dilate)
         result = legacy
-        for config in (_CONFIG, _LATIN_CONFIG):
-            alpha = _text_mark_engine.load_alpha_template(config.asset_name)
-            if alpha is None:
-                continue
-            core = self._aligned_alpha_mask(
+        alpha = _text_mark_engine.load_alpha_template(engine.config.asset_name)
+        if alpha is not None:
+            core = engine._aligned_alpha_mask(
                 image,
                 det,
                 alpha,

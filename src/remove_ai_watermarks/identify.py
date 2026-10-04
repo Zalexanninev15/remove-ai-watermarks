@@ -957,7 +957,8 @@ def _integrity_clashes(
         clashes.append(
             "Conflicting AI-origin attributions from independent signals: "
             + " vs ".join(parts)
-            + " -- one provenance set was likely spoofed, transplanted, or laundered."
+            + " -- these fields may describe different stages of an edit chain; "
+            "the available evidence does not establish which attribution describes the final pixels."
         )
 
     # Rule 2: a camera-capture C2PA device next to an AI-generation marker. Only
@@ -967,13 +968,15 @@ def _integrity_clashes(
     # AI edit in ONE manifest, so the AI vendor is named only from that same
     # manifest (C2PA issuer + SynthID provenance) -- a legitimate edit chain, not a
     # spoof. An EXIF/XMP generator, IPTC field, TC260 AIGC label, or second
-    # manifest naming AI on a camera capture is the real laundering tell.
+    # manifest naming AI on a camera capture records a second stage whose relation
+    # to the capture cannot be resolved from these fields alone.
     independent_ai_marker = any(grp != _C2PA_MANIFEST_SOURCE for grp in source.values())
     if camera_label and camera_has_ai_marker and independent_ai_marker:
         vendors = ", ".join(sorted(set(ai_vendors.values()))) or "present"
         clashes.append(
             f"Camera-capture C2PA credentials ({camera_label}) coexist with AI-generation markers "
-            f"({vendors}) -- a genuine camera capture is not AI-generated, so the provenance is inconsistent."
+            f"({vendors}) -- these fields may describe a captured image followed by an AI edit; "
+            "the available evidence does not establish which stage describes the final pixels."
         )
 
     return clashes

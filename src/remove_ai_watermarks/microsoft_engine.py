@@ -38,10 +38,12 @@ status was not adjudicated, and 1200 non-overlapping no-signal controls:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from remove_ai_watermarks import _text_mark_engine
-from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkEngine
+from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkDetection
+from remove_ai_watermarks._text_mark_variants import GlyphTextMarkEngine, TextMarkVariantsMixin
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -101,8 +103,62 @@ def _alpha_template() -> NDArray[Any] | None:
     return _text_mark_engine.load_alpha_template(_CONFIG.asset_name)
 
 
-class MicrosoftEngine(TextMarkEngine):
+class MicrosoftEngine(TextMarkVariantsMixin):
     """Detect/localize the measured Microsoft top-right AI badge."""
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
+        self._variants = (
+            GlyphTextMarkEngine(
+                replace(
+                    _CONFIG,
+                    asset_name="microsoft_text_alpha.png",
+                    width_frac=0.20,
+                    height_frac=0.065,
+                    margin_x_frac=0.002,
+                    margin_bottom_frac=0.002,
+                    scale_basis="width",
+                    alpha_width_frac=0.14,
+                    alpha_height_frac=0.14 * 49 / 339,
+                    detect_frontend="contrast",
+                    ladder=(0.95, 1.0, 1.05),
+                    detect_ncc_threshold=0.60,
+                    provenance_ncc_factor=1.0,
+                    max_saturation=255,
+                )
+            ),
+        )
+
+    def footprint_mask(
+        self,
+        image: NDArray[Any] | None,
+        *,
+        force: bool = False,
+        dilate: int | None = None,
+        detection: TextMarkDetection | None = None,
+    ) -> NDArray[Any] | None:
+        """Cover the enclosing beige pill for the text-only layout."""
+        if force or image is None or image.size == 0:
+            return super().footprint_mask(image, force=force, dilate=dilate, detection=detection)
+        det = detection if detection is not None else self.detect(image)
+        engine = self.variant_engine(det)
+        if engine is self or not det.detected or det.match_box is None:
+            return super().footprint_mask(image, force=False, dilate=dilate, detection=det)
+
+        from remove_ai_watermarks import region_eraser
+
+        loc = engine.locate(image)
+        x0, y0, x1, y1 = det.match_box
+        pad_x = int(image.shape[1] * 0.012)
+        pad_y = int(image.shape[1] * 0.014)
+        box = (
+            max(0, loc.x + x0 - pad_x),
+            max(0, loc.y + y0 - pad_y),
+            x1 - x0 + 1 + 2 * pad_x,
+            y1 - y0 + 1 + 2 * pad_y,
+        )
+        return region_eraser.boxes_to_mask(
+            image.shape[:2],
+            [box],
+            dilate=0 if dilate is None else max(0, dilate),
+        )

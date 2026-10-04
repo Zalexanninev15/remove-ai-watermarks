@@ -25,10 +25,12 @@ signal via the registry.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from remove_ai_watermarks import _text_mark_engine, image_io
-from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkDetection, TextMarkEngine
+from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkDetection
+from remove_ai_watermarks._text_mark_variants import GlyphTextMarkEngine, TextMarkVariantsMixin
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -107,11 +109,27 @@ def _template_match_score(box_mask: NDArray[Any], scale_base: int) -> float:
     return _text_mark_engine.template_match_score(box_mask, scale_base, _CONFIG)
 
 
-class SamsungEngine(TextMarkEngine):
+class SamsungEngine(TextMarkVariantsMixin):
     """Detect/localize the visible Samsung Galaxy AI text mark (locate -> mask; mask feeds the fill)."""
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
+        self._variants = (
+            GlyphTextMarkEngine(
+                replace(
+                    _CONFIG,
+                    asset_name="samsung_ko_alpha.png",
+                    width_frac=0.28,
+                    height_frac=0.065,
+                    alpha_width_frac=0.20,
+                    alpha_height_frac=0.20 * 49 / 344,
+                    ladder=(0.95, 1.0, 1.05),
+                    max_saturation=255,
+                    detect_frontend="contrast",
+                    detect_ncc_threshold=0.46,
+                )
+            ),
+        )
 
     def footprint_mask(
         self,
@@ -134,10 +152,29 @@ class SamsungEngine(TextMarkEngine):
 
         image = image_io.to_bgr(image)
         det = detection if detection is not None else self.detect(image)
-        alpha = _alpha_template()
+        engine = self.variant_engine(det)
+        radius = _FOOTPRINT_DILATE if dilate is None else max(0, dilate)
+        if engine is not self and det.detected and det.match_box is not None:
+            from remove_ai_watermarks import region_eraser
+
+            x0, y0, x1, y1 = det.match_box
+            loc = engine.locate(image)
+            glyph_height = y1 - y0 + 1
+            return region_eraser.boxes_to_mask(
+                image.shape[:2],
+                [
+                    (
+                        max(0, loc.x + x0 - round(1.3 * glyph_height)),
+                        loc.y + y0,
+                        x1 - x0 + 1 + round(1.3 * glyph_height),
+                        glyph_height,
+                    )
+                ],
+                dilate=radius,
+            )
+        alpha = _text_mark_engine.load_alpha_template(engine.config.asset_name)
         if alpha is not None:
-            radius = _FOOTPRINT_DILATE if dilate is None else max(0, dilate)
-            aligned = self._aligned_alpha_mask(
+            aligned = engine._aligned_alpha_mask(
                 image,
                 det,
                 alpha,

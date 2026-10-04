@@ -73,7 +73,7 @@ MARKS = {
     "gemini_text_alpha.png": "Generated with Gemini",
     # Candidate wordmarks measured on a local evaluation corpus (unregistered).
     "notebooklm_alpha.png": "NotebookLM",
-    "dola_alpha.png": "DolaAI",
+    "dola_alpha.png": "Dola AI",
     "mindvideo_alpha.png": "MindVideo.AI",
     "higgsfield_alpha.png": "HIGGSFIELD AI",
     "capcut_alpha.png": "CapCut AI",
@@ -92,6 +92,7 @@ _REGISTERED = {f"{key}_alpha.png" for key in mark_keys()} & MARKS.keys()
 
 # Per-mark post-processing for the multi-line / slanted stamps (see render()).
 MARK_OPTS: dict[str, dict[str, Any]] = {
+    "dola_alpha.png": {"font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf"},
     # Hiragino Sans GB W6, tight leading, dilation, and negative shear match the
     # standard Yuanbao stamp without clipping the lower line.
     "yuanbao_alpha.png": {

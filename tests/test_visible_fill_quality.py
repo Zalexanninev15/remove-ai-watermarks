@@ -24,6 +24,8 @@ _ALTERNATE_SIZE = {
     "wan": (1280, 1280),
     "kling": (1280, 960),
     "yuanbao": (1280, 960),
+    "dola": (1280, 960),
+    "workbuddy": (1280, 960),
     "samsung": (2304, 1728),
     "runninghub": (1280, 960),
     "baidu": (1280, 960),

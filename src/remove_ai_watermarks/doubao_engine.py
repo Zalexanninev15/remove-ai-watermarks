@@ -25,10 +25,12 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
+import cv2
 import numpy as np
 
 from remove_ai_watermarks import _text_mark_engine, image_io
 from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkDetection, TextMarkEngine, TextMarkScan
+from remove_ai_watermarks._text_mark_variants import BottomRightBoxTextMarkEngine, TextMarkVariantsMixin
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -117,6 +119,41 @@ _CONFIG = TextMarkConfig(
 _TINTED_ENGINE = TextMarkEngine(dataclasses.replace(_CONFIG, max_saturation=_TINTED_MAX_SATURATION))
 
 
+class _OutlinedDoubaoEngine(BottomRightBoxTextMarkEngine):
+    # The outlined layout's provenance-relaxed NCC floor overlaps ordinary corner
+    # texture. Require bright neutral strokes and edge detail in the winning box
+    # to distinguish the label from unmarked corners. Metadata confirms
+    # Doubao as the producer, not that the export retained a visible label.
+    _MIN_BRIGHT_NEUTRAL_FRACTION = 0.29
+    _MIN_MEAN_LAPLACIAN = 10.0
+    _BOX_PAD_LEFT_HEIGHT = 1.2
+    _BOX_PAD_RIGHT_HEIGHT = 0.7
+
+    @classmethod
+    def _outline_pixels_ok(cls, patch: NDArray[Any]) -> bool:
+        if patch.size == 0:
+            return False
+        patch = image_io.to_bgr(patch)
+        gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
+        saturation = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)[:, :, 1]
+        bright_neutral = float(np.mean((gray > 160) & (saturation < 60)))
+        edge_detail = float(np.mean(np.abs(cv2.Laplacian(gray, cv2.CV_32F))))
+        return bright_neutral >= cls._MIN_BRIGHT_NEUTRAL_FRACTION and edge_detail >= cls._MIN_MEAN_LAPLACIAN
+
+    def _scan(self, image: NDArray[Any] | None) -> TextMarkScan:
+        scan = super()._scan(image)
+        if image is None or scan.loc is None or scan.match_box is None or scan.score is None:
+            return scan
+        x0, y0, x1, y1 = scan.match_box
+        patch = image[
+            scan.loc.y + y0 : scan.loc.y + y1 + 1,
+            scan.loc.x + x0 : scan.loc.x + x1 + 1,
+        ]
+        if not self._outline_pixels_ok(patch):
+            return dataclasses.replace(scan, score=0.0)
+        return scan
+
+
 def _alpha_template() -> NDArray[Any] | None:
     """The bundled Doubao alpha template (float [0,1]), or None."""
     return _text_mark_engine.load_alpha_template(_CONFIG.asset_name)
@@ -132,11 +169,29 @@ def _template_match_score(box_mask: NDArray[Any], scale_base: int) -> float:
     return _text_mark_engine.template_match_score(box_mask, scale_base, _CONFIG)
 
 
-class DoubaoEngine(TextMarkEngine):
+class DoubaoEngine(TextMarkVariantsMixin):
     """Detect/localize the visible Doubao "豆包AI生成" watermark (locate -> mask; mask feeds the fill)."""
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
+        self._variants = (
+            _OutlinedDoubaoEngine(
+                dataclasses.replace(
+                    _CONFIG,
+                    asset_name="doubao_outline_alpha.png",
+                    width_frac=0.28,
+                    height_frac=0.13,
+                    scale_basis="width",
+                    alpha_width_frac=0.14,
+                    alpha_height_frac=0.14 * 0.75 * 77 / 346,
+                    max_saturation=255,
+                    detect_frontend="contrast",
+                    ladder=(0.95, 1.0, 1.05),
+                    detect_ncc_threshold=0.50,
+                    provenance_ncc_factor=0.25,
+                )
+            ),
+        )
 
     def _scan(self, image: NDArray[Any] | None) -> TextMarkScan:
         base = super()._scan(image)
@@ -179,12 +234,15 @@ class DoubaoEngine(TextMarkEngine):
         det = detection if detection is not None else self.detect(image)
         if not det.detected or det.match_box is None:
             return super().footprint_mask(image, force=False, dilate=dilate, detection=det)
-        alpha = _alpha_template()
+        engine = self.variant_engine(det)
+        if engine is not self:
+            return engine.footprint_mask(image, force=False, dilate=dilate, detection=det)
+        alpha = _text_mark_engine.load_alpha_template(engine.config.asset_name)
         if alpha is None:
             return super().footprint_mask(image, force=False, dilate=dilate, detection=det)
 
         radius = _FOOTPRINT_DILATE if dilate is None else max(0, dilate)
-        return self._aligned_alpha_mask(
+        return engine._aligned_alpha_mask(
             image,
             det,
             alpha,

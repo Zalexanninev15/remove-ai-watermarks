@@ -370,11 +370,11 @@ remove-ai-watermarks batch ./images --mode all
 Visible mark support includes:
 
 - Google Gemini and Nano Banana visible sparkle watermark;
-- Doubao, the Jimeng wordmark and top-left `AI生成` pill, Qwen, Kling AI,
-  Yuanbao, Baidu, LiblibAI's bottom-center wordmark and compact top-left pill,
-  and RunningHub labels;
-- one calibrated Microsoft top-right white AI-badge variant;
-- one calibrated Samsung Galaxy AI label variant;
+- Doubao, the Jimeng wordmark and top-left `AI生成` layouts, Qwen, Kling AI,
+  Yuanbao, Dola, WorkBuddy, Baidu, LiblibAI's bottom-center wordmark and compact
+  top-left pill, and RunningHub labels;
+- calibrated Microsoft top-right white and beige AI-badge layouts;
+- calibrated Italian and Korean Samsung Galaxy AI disclosures;
 - a generic brand-less bottom-right `AI生成` fallback for OS/gallery-level
   AI-edit stamps that carry no vendor wordmark of their own (vivo and Xiaomi
   Gallery confirmed); synthetic-only calibration, weaker evidence than the

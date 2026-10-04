@@ -3,8 +3,7 @@
 OpenArt (openart.ai) stamps free-plan generations with a semi-transparent white
 "OpenArt" wordmark (a bowtie/infinity icon followed by the brand name) placed
 **near the center of the frame**, not in a corner like every other text mark
-this repository detects. Confirmed from one customer-reported production case
-(raiw-app, 2026-09-11, 1528x2712 portrait output): the mark sat roughly centered
+this repository detects. In the observed portrait layout, the mark sat roughly centered
 over the subject's torso, and neither C2PA, EXIF AI tags, nor the China AIGC/TC260
 label were present -- OpenArt apparently ships no machine-readable provenance
 signal alongside this visible mark, so a bare export was previously reported as

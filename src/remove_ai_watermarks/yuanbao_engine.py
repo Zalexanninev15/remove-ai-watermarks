@@ -22,6 +22,7 @@ covered by this silhouette.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from remove_ai_watermarks import _text_mark_engine
@@ -29,6 +30,7 @@ from remove_ai_watermarks._text_mark_engine import (
     BottomRightAnchoredEngine,
     TextMarkConfig,
 )
+from remove_ai_watermarks._text_mark_variants import BottomRightBoxTextMarkEngine, TextMarkVariantsMixin
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -79,7 +81,7 @@ def _alpha_template() -> NDArray[Any] | None:
     return _text_mark_engine.load_alpha_template(_CONFIG.asset_name)
 
 
-class YuanbaoEngine(BottomRightAnchoredEngine):
+class YuanbaoEngine(TextMarkVariantsMixin, BottomRightAnchoredEngine):
     """Detect and localize the bottom-right Yuanbao mark."""
 
     _ANCHOR_MAX_RIGHT = 0.04
@@ -87,3 +89,36 @@ class YuanbaoEngine(BottomRightAnchoredEngine):
 
     def __init__(self) -> None:
         super().__init__(_CONFIG)
+        self._variants = (
+            BottomRightBoxTextMarkEngine(
+                replace(
+                    _CONFIG,
+                    asset_name="yuanbao_compact_alpha.png",
+                    width_frac=0.28,
+                    height_frac=0.13,
+                    scale_basis="width",
+                    alpha_width_frac=0.09,
+                    alpha_height_frac=0.09 * 238 / 387 * 0.75,
+                    ladder=(0.95, 1.0, 1.05),
+                    detect_ncc_threshold=0.50,
+                    provenance_ncc_factor=0.62,
+                    max_saturation=255,
+                )
+            ),
+            BottomRightBoxTextMarkEngine(
+                replace(
+                    _CONFIG,
+                    asset_name="yuanbao_compact_gray_alpha.png",
+                    width_frac=0.28,
+                    height_frac=0.13,
+                    scale_basis="width",
+                    alpha_width_frac=0.06,
+                    alpha_height_frac=0.06 * 238 / 387 * 0.90,
+                    ladder=(0.95, 1.0, 1.05),
+                    detect_frontend="gray",
+                    detect_ncc_threshold=0.50,
+                    provenance_ncc_factor=0.50,
+                    max_saturation=255,
+                )
+            ),
+        )

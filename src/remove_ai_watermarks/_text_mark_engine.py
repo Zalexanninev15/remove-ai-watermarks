@@ -181,6 +181,7 @@ class TextMarkDetection:
     # ``footprint_mask`` reuses a threaded detection only when it matches the STRICT
     # level its own re-detect would have used -- see TextMarkEngine._strict_detection.
     provenance: bool = False
+    template_asset: str | None = None
 
 
 def best_detection(*detections: TextMarkDetection) -> TextMarkDetection:
@@ -665,7 +666,7 @@ class TextMarkEngine:
     def _verdict(self, scan: TextMarkScan, *, provenance: bool) -> TextMarkDetection:
         """Apply the trust-level-dependent tail to a scan, as a fresh result object."""
         c = self.config
-        det = TextMarkDetection(provenance=provenance)
+        det = TextMarkDetection(provenance=provenance, template_asset=c.asset_name)
         if scan.loc is None or scan.box is None:
             return det
         det.region = scan.loc.bbox

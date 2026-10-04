@@ -11,19 +11,21 @@ The `visible` command registers these mark keys:
 | Key | Mark | Expected area | Important limit |
 | --- | --- | --- | --- |
 | `gemini` | Google Gemini visible watermark (sparkle) | Usually bottom right | Detection includes a false positive gate. |
-| `doubao` | `豆包AI生成` | Bottom right | Vendor specific text detector. |
+| `doubao` | `豆包AI生成` | Bottom right | Covers filled and outlined text layouts; the weak outlined layout requires matching Doubao provenance. |
 | `jimeng` | `★ 即梦AI` | Bottom right | Vendor specific text detector. |
 | `qwen` | `千问AI生成` or the three-lobe Qwen symbol | Bottom right | Separate strict templates cover the text and Qwen Create symbol variants. |
 | `wan` | Wan logo and `Wan` wordmark | Bottom right, hugging the corner | Provisional: one real Wan 2.7 Pro export. Requires NCC >= 0.55 and a match that ends within 0.015 of the short side from both edges. |
-| `kling` | `可灵AI 3.0` or `KlingAI 3.0` | Bottom right | Separate calibrated silhouettes cover the older CJK and current IMAGE 3.0 Latin variants. |
-| `yuanbao` | `元宝` over `AI生成` | Bottom right | Standard two-line variant only. |
-| `samsung` | `✦ Contenuti generati dall'AI` | Bottom left | Calibrated for the Italian text variant. |
+| `kling` | `可灵AI 3.0` or `KlingAI 3.0` | Bottom right | Separate calibrated silhouettes cover the older CJK and current IMAGE 3.0 Latin variants; a glyph-detail gate rejects plain UI boundaries. |
+| `yuanbao` | `元宝` over `AI生成` | Bottom right | Separate strict and provenance-corroborated templates cover the measured two-line rasterizations. |
+| `dola` | `Dola AI` | Bottom right | Text detector and detector-aligned wordmark footprint. |
+| `workbuddy` | `AI生成` over `WORKBUDDY>_` | Bottom right | Text detector and detector-aligned stacked-label footprint. |
+| `samsung` | Italian or Korean Galaxy AI disclosure | Bottom left | Independently gated text layouts cover `Contenuti generati dall'AI` and `AI로 생성한 콘텐츠`. |
 | `runninghub` | `RunningHub AI生成` | Top left | Strict visual and position gates. |
 | `baidu` | `百度 AI生成` | Bottom right | Detector and extended removal footprint. |
 | `liblib` | `LiblibAI` | Bottom center | Historical wordmark variant; includes a minimum image size gate. |
 | `liblib_pill` | Compact `AI生成` pill | Top left | Auto removal requires LiblibAI metadata or the bottom-center wordmark, plus a flat background under the pill. |
-| `microsoft` | One Microsoft white AI-badge variant | Top right | Strict uses the visual gate; auto can use Microsoft provenance for the measured [relaxed gate](module-internals.md#visible-mark-removal). Other documented icon, text, and position variants are not covered. |
-| `jimeng_pill` | `AI生成` pill | Top left | Weak detector with additional product and background gates. |
+| `microsoft` | Microsoft white AI badge or beige `Made with AI` pill | Top right | Each layout has its own strict visual gate; auto can use Microsoft provenance for the original badge's measured [relaxed gate](module-internals.md#visible-mark-removal). |
+| `jimeng_pill` | `AI生成` pill | Top left | A verified label layout can bypass the flat-background guard only with Jimeng provenance; the weak outline detector retains the product and background gates. |
 | `generic_ai_label` | Bare `AI生成` text, no vendor wordmark | Bottom right | Brand-less TC260 compliance-stamp fallback (vivo and Xiaomi Gallery AI-edit output confirmed; see [module-internals.md](module-internals.md#generic-bare-ai生成-label)). Font-rendered synthetic asset; **calibrated on a synthetic corpus only**, not a real captured generator screenshot -- treat as weaker evidence than the vendor-tuned detectors above. |
 | `openart` | `OpenArt` wordmark (bowtie/infinity icon + brand name) | Frame center, not a corner | Confirmed from one customer-reported production case; no known metadata signal, so the visible mark is the only attribution route. **UNCALIBRATED**: procedurally reconstructed asset, no captured corpus -- see [module-internals.md](module-internals.md#openart-wordmark). |
 

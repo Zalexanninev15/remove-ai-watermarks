@@ -1596,8 +1596,8 @@ their own: the Gemini sparkle has its own higher-confidence path, and the pill
 alone is too weak to attribute.
 
 The set of marks that veto the Jimeng pill is derived from the registry rows:
-every other product from the same manufacturer. Doubao therefore vetoes the pill
-because both products are ByteDance, while Qwen, Kling, Yuanbao, RunningHub,
+every other product from the same manufacturer. Doubao and Dola therefore veto the pill
+because all three products are ByteDance, while Qwen, Kling, Yuanbao, RunningHub,
 Baidu, and LiblibAI do not become siblings merely because they use the same TC260
 standard. Marks from other manufacturers cannot enable or veto the
 ByteDance-specific arm.
@@ -1656,8 +1656,7 @@ assets and template ladder are immutable.
 
 A decorative sparkle/glint/star glyph in stylized typography -- a bright,
 near-white four-point accent, the same silhouette family the engine's own
-template captures -- is a known, unresolved false-positive class. Incident
-2026-08-27 (raiw-app, Spaces uid 7e01ef8cb99949bba14ab4607a66ae06): a book-cover
+template captures -- is a known, unresolved false-positive class. A book-cover
 title's decorative diamond accent inside a neon-glow letterform scored 0.64, just
 under `_SPARKLE_FP_CONF`, and the removal step painted a permanent smudge over
 the artwork. Investigation (margin, gradient, saturation, and a prototyped local
@@ -1697,6 +1696,11 @@ Regression coverage:
 [`_text_mark_engine.py`](../src/remove_ai_watermarks/_text_mark_engine.py)
 provides common localization, detection front ends, template caching, rival
 comparison, and footprint construction.
+[`_text_mark_variants.py`](../src/remove_ai_watermarks/_text_mark_variants.py)
+combines independently gated layouts under one registry key while retaining the
+winning layout's template and mask geometry. Its bottom-right variant searches
+only anchor-valid placements, so an unrelated stronger match elsewhere in the
+corner ROI cannot hide the real edge-hugging mark.
 
 Each vendor module supplies a `TextMarkConfig` and only the behavior that cannot
 be represented by the shared base:
@@ -1706,6 +1710,8 @@ be represented by the shared base:
 - [`qwen_engine.py`](../src/remove_ai_watermarks/qwen_engine.py)
 - [`kling_engine.py`](../src/remove_ai_watermarks/kling_engine.py)
 - [`yuanbao_engine.py`](../src/remove_ai_watermarks/yuanbao_engine.py)
+- [`dola_engine.py`](../src/remove_ai_watermarks/dola_engine.py)
+- [`workbuddy_engine.py`](../src/remove_ai_watermarks/workbuddy_engine.py)
 - [`samsung_engine.py`](../src/remove_ai_watermarks/samsung_engine.py)
 - [`runninghub_engine.py`](../src/remove_ai_watermarks/runninghub_engine.py)
 - [`baidu_engine.py`](../src/remove_ai_watermarks/baidu_engine.py)
@@ -1750,7 +1756,10 @@ on 2026-09-04 uses `KlingAI 3.0`. The Latin template scored 0.429 on that 1024 x
 across the 94 available neighboring real and synthetic image controls, while an
 adversarial solid corner blob reached 0.379, so its strict gate is 0.40. This is
 one-positive provisional calibration, intentionally separate from the older
-CJK detector rather than presented as broad recall evidence.
+CJK detector rather than presented as broad recall evidence. Both layouts now
+project row-wide and column-wide structure out of the winning patch before a
+second correlation. This preserves glyph detail while rejecting ordinary panel
+and image boundaries that previously matched the Latin template.
 
 The measured Microsoft badge variant (2026-08-27 registration) is the first
 `tr`-corner mark and the first `long`-side scale basis: the pill tracks the
@@ -1761,7 +1770,8 @@ undersized the template by the aspect ratio (portrait carriers fell to
 its synthetic internal shapes knocked out - the holes are what separate it from
 any other bright rounded corner element (a plain white pill scores below the gate
 in the tests). It does not claim coverage of Microsoft's other documented icon,
-wording, or position variants.
+wording, or position variants beyond the separately gated beige `Made with AI`
+text pill.
 
 The 2026-08-27 rerun used the registered engine through
 `scripts/registered_mark_calibrate.py`, rather than a copied detector
@@ -1798,8 +1808,9 @@ box grows), not the whole `footprint_mask`. Baidu extends right to the corner ta
 and LiblibAI extends left to the triangle logo; both inherit every guard around
 that arithmetic.
 
-Doubao, Kling, and Samsung are deliberate sparse-mask exceptions because their alpha assets
-supply more information than a rectangle. Doubao's continuous top-hat response
+Doubao, Kling, and Samsung retain deliberate sparse masks for their original
+layouts because those alpha assets supply more information than a rectangle.
+Doubao's continuous top-hat response
 locates the mark, then `DoubaoEngine.footprint_mask` resizes the alpha to that same winning
 `match_box` and masks only the glyphs. The canonical 2048-pixel fixture has bright
 branch texture behind the bottom-edge wordmark; bounding the thresholded response,
@@ -1808,6 +1819,13 @@ and right edges. OpenCV then had no context beyond either edge and filled the ho
 with large triangular wedges. The aligned sparse mask keeps both frame edges
 untouched and still clears the detector. `force` cannot align a missing detection,
 so it retains the shared geometry-box fallback.
+
+The added outlined Doubao, stacked Yuanbao, Dola, WorkBuddy, Korean Samsung, and
+beige Microsoft layouts use solid detector-aligned footprints where a sparse
+synthetic glyph mask left visible outlines, sparkles, capsules, or shadows in
+rendered removal checks. Each layout keeps its own detection threshold and mask
+geometry; selecting one does not replace the calibrated behavior of the older
+layout under the same registry key.
 
 Doubao keeps the original low-saturation scan for pale corners. When enough of
 its corner is strongly colored and that scan falls below the strict gate, a
@@ -1936,14 +1954,12 @@ exists.
 
 #### OpenArt wordmark
 
-Registered 2026-09-21 for a confirmed production miss reported through raiw-app:
-a free `visible`-mode run (2026-09-11, 1528x2712 portrait, Spaces uid
-`aefb1e07306f4a7280615a8daea01a39`) left a large, prominent OpenArt wordmark
+Registered 2026-09-21 after a `visible`-mode run left a large, prominent OpenArt wordmark
 (a bowtie/infinity icon followed by "OpenArt" in bold sans-serif, semi-
 transparent white) completely unremoved -- pixel-identical before and after.
 `identify` found nothing at all for that case: no C2PA, EXIF AI tag, or China
 AIGC/TC260 label, so the visible mark is the only known attribution route for
-a bare OpenArt export. The user rated the result 0 ("Didn't work").
+a bare OpenArt export.
 
 **This is the only registered mark placed at the FRAME CENTER rather than a
 corner.** Every other engine in this family anchors to one of the four corners
@@ -2007,10 +2023,14 @@ geometry, and until one exists the bare-arm question is settled by this
 measurement, not by gate tuning. The local calibration harness is not tracked.
 (cohorts A/B/C over the no-signal pool).
 
-The weak Jimeng pill detector lives in
-[`pill_engine.py`](../src/remove_ai_watermarks/pill_engine.py). It uses a
-synthetic silhouette for detection and a fixed top-left footprint. Its public,
-published real-world regression carrier is
+The Jimeng pill detector lives in
+[`pill_engine.py`](../src/remove_ai_watermarks/pill_engine.py). It combines the
+existing weak synthetic-outline path with a high-confidence contrast template
+for the measured solid `AI生成` label. A Jimeng provenance match can corroborate
+that verified label without the flat-background guard; the weak outline keeps
+both the provenance and background gates described above. Removal follows the
+matched label when verified and otherwise uses the fixed top-left footprint. Its
+public, published real-world regression carrier is
 `data/fixtures/visible/jimeng_pill/provider-published-example.jpg`; the direct
 detector scores the pill at 0.28 and the same image's Jimeng wordmark at 0.61.
 

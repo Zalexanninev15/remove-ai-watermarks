@@ -1,18 +1,20 @@
-"""Jimeng-basic 'AI生成' pill: a CAPTURE-LESS visible mark (issue #54).
+"""Jimeng-basic ``AI生成`` pill visible mark (issue #54).
 
 The Jimeng free-tier TC260 label is a rounded pill with 'AI生成' in the TOP-LEFT
 corner -- distinct from the ``jimeng`` "★ 即梦AI" wordmark (bottom-right). It has no
-captured alpha map, so unlike the other marks it is detected purely by a synthetic
-silhouette; like every mark it is then removed by the shared localize -> fill:
+captured alpha map for its outline. Detection therefore has two paths before the
+shared localize -> fill step:
 
-  * Detect: edge-NCC of a font-rendered SILHOUETTE (``assets/jimeng_pill.png``,
+  * A high-confidence contrast template for the measured solid ``AI生成`` label
+    (``assets/jimeng_label_alpha.png``). With Jimeng provenance this verified
+    label can bypass the flat-background safety gate.
+  * Edge-NCC of a font-rendered SILHOUETTE (``assets/jimeng_pill.png``,
     synthetic, data-safe -- see ``scripts/render_pill_silhouette.py``) against the
-    top-left ROI, at the pill's known width fraction. The calibrated
-    ``_DETECT_THRESHOLD`` is 0.22.
-  * Remove: place the pill footprint at the matched location and inpaint it
-    (MI-GAN / cv2 via the registry). Quality comes from the inpaint backend, so the
-    silhouette need not be pixel-accurate -- which is why a synthetic render is
-    sufficient and no source-derived asset is committed.
+    top-left ROI, at the pill's known width fraction. Its calibrated
+    ``_DETECT_THRESHOLD`` is 0.22 and it retains the provenance and flat-background
+    product gates.
+  * Remove: mask the verified label match or the stable outline footprint and
+    inpaint it (MI-GAN / cv2 via the registry).
 
 Geometry uses width ~0.161*W,
 height ~0.091*W, top-left, margins ~0.02-0.05.
@@ -27,6 +29,7 @@ import cv2
 import numpy as np
 
 from remove_ai_watermarks import image_io
+from remove_ai_watermarks._text_mark_engine import TextMarkConfig, TextMarkDetection, TextMarkEngine
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -74,6 +77,32 @@ class PillDetection(NamedTuple):
     detected: bool
     confidence: float
     region: tuple[int, int, int, int]  # x, y, w, h of the matched pill
+    verified_label: bool = False
+
+
+_LABEL_CONFIG = TextMarkConfig(
+    name="Jimeng AI生成 pill label",
+    asset_name="jimeng_label_alpha.png",
+    corner="tl",
+    margin_floor=2,
+    width_frac=0.34,
+    height_frac=0.14,
+    margin_x_frac=0.0,
+    margin_bottom_frac=0.0,
+    max_saturation=255,
+    logo_min_luma=100,
+    tophat_delta=8,
+    morph_open_size=3,
+    detect_min_coverage=0.01,
+    detect_ncc_threshold=0.55,
+    detect_frontend="contrast",
+    scale_basis="width",
+    ladder=(0.95, 1.0, 1.05),
+    alpha_width_frac=0.14,
+    alpha_height_frac=0.14 * 128 / 353,
+    min_gw=24,
+    provenance_ncc_factor=1.0,
+)
 
 
 def _load_silhouette() -> NDArray[Any] | None:
@@ -92,7 +121,18 @@ def _grad(gray: NDArray[Any]) -> NDArray[Any]:
 
 
 class PillEngine:
-    """Detect + build the removal mask for the top-left 'AI生成' pill (edge-NCC of a synthetic silhouette)."""
+    """Detect the top-left ``AI生成`` label or its synthetic pill outline."""
+
+    def __init__(self, *, include_label: bool = True) -> None:
+        self._label = TextMarkEngine(_LABEL_CONFIG) if include_label else None
+
+    @staticmethod
+    def _label_box(detection: TextMarkDetection) -> tuple[int, int, int, int] | None:
+        if not detection.detected or detection.match_box is None:
+            return None
+        x, y, _width, _height = detection.region
+        x0, y0, x1, y1 = detection.match_box
+        return x + x0, y + y0, x1 - x0 + 1, y1 - y0 + 1
 
     def _match(self, image: NDArray[Any]) -> tuple[float, tuple[int, int, int, int]] | None:
         sil = _load_silhouette()
@@ -113,12 +153,33 @@ class PillEngine:
         _, score, _, loc = cv2.minMaxLoc(res)
         return float(score), (int(loc[0]), int(loc[1]), tw, th)
 
-    def detect(self, image: NDArray[Any]) -> PillDetection:
-        m = self._match(image)
-        if m is None:
-            return PillDetection(False, 0.0, (0, 0, 0, 0))
-        score, box = m
-        return PillDetection(score >= _DETECT_THRESHOLD, score, box)
+    def _detection(
+        self,
+        match: tuple[float, tuple[int, int, int, int]] | None,
+        label: TextMarkDetection,
+    ) -> PillDetection:
+        label_box = self._label_box(label)
+        if match is None:
+            return PillDetection(label.detected, label.confidence, label_box or label.region, label.detected)
+        score, box = match
+        return PillDetection(
+            score >= _DETECT_THRESHOLD or label.detected,
+            max(score, label.confidence),
+            label_box if label.detected and label_box is not None else box,
+            label.detected,
+        )
+
+    def detect(self, image: NDArray[Any], *, provenance: bool = False) -> PillDetection:
+        """Detect the outline, plus the solid label when Jimeng is corroborated."""
+        label_scan = self._label.detect(image) if self._label is not None else TextMarkDetection()
+        label = label_scan if provenance else TextMarkDetection()
+        return self._detection(self._match(image), label)
+
+    def detect_both(self, image: NDArray[Any]) -> tuple[PillDetection, PillDetection]:
+        """Return strict outline and Jimeng-corroborated label verdicts from one scan."""
+        match = self._match(image)
+        label = self._label.detect(image) if self._label is not None else TextMarkDetection()
+        return self._detection(match, TextMarkDetection()), self._detection(match, label)
 
     def _footprint_box(self, image: NDArray[Any]) -> tuple[int, int, int, int] | None:
         h, w = image.shape[:2]
@@ -152,19 +213,34 @@ class PillEngine:
         """True when the top-left footprint is flat enough for an invisible inpaint."""
         return self.footprint_texture(image) <= thresh
 
-    def footprint_mask(self, image: NDArray[Any], *, force: bool = False) -> NDArray[Any] | None:
+    def footprint_mask(
+        self,
+        image: NDArray[Any],
+        *,
+        force: bool = False,
+        detection: PillDetection | None = None,
+    ) -> NDArray[Any] | None:
         """Full-frame uint8 mask (255 = pill) over the pill's known top-left region.
 
-        Uses stable GEOMETRY (a generous fixed box), not the NCC match position: the
-        synthetic silhouette localizes only approximately, so a match-positioned mask
-        leaves outline residue, while the top-left corner is negative space, so a
-        generous geometric box removes the pill cleanly and harmlessly. The caller
+        A verified label uses its detector-aligned box with measured padding. The
+        weaker synthetic outline uses stable geometry because its NCC position is
+        only approximate and a match-positioned mask leaves rim residue. The caller
         gates on :meth:`detect`, so a clean corner is never masked. ``force`` is
-        accepted for a uniform engine signature but ignored (the geometry box is
-        fixed regardless)."""
+        accepted for a uniform engine signature but ignored."""
         if image is None or image.size == 0:
             return None
-        box = self._footprint_box(image)
+        if detection is not None and detection.verified_label:
+            x, y, width, height = detection.region
+            pad_x = int(image.shape[1] * 0.025)
+            pad_y = int(image.shape[1] * 0.014)
+            box = (
+                max(0, x - pad_x),
+                max(0, y - pad_y),
+                min(image.shape[1], x + width + pad_x),
+                min(image.shape[0], y + height + pad_y),
+            )
+        else:
+            box = self._footprint_box(image)
         if box is None:
             return None
         # Same primitive the shared fill uses, rather than a private zeros/fill copy.
